@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>تخته‌نرد حرفه‌ای</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ============================ خوش‌آمد ============================ -->
+  <section class="screen" id="screen-welcome">
+    <div class="login-wrap">
+      <div class="logo">
+        <div class="dice-logo">🎲</div>
+        <h1>تخته‌نرد حرفه‌ای</h1>
+        <p>بازی آنلاین با حریف‌های واقعی</p>
+      </div>
+
+      <div class="welcome-gift">
+        <div style="font-size:26px">🎁</div>
+        <div class="big">۵۰۰ سکه هدیه</div>
+        <div class="muted" style="margin-top:4px">فقط با ثبت‌نام، رایگان دریافت کنید</div>
+      </div>
+
+      <button class="btn primary" id="btn-go-phone" style="margin-bottom:10px">📱 ورود با شماره موبایل</button>
+      <button class="btn ghost" id="btn-guest">ورود مهمان (بدون شماره)</button>
+      <div class="muted" style="text-align:center;margin-top:14px;font-size:11.5px">
+        با ورود، <b>قوانین بازی</b> را می‌پذیرید. شماره‌ی شما فقط برای ورود و بازگرداندن حساب استفاده می‌شود.
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ شماره موبایل ============================ -->
+  <section class="screen" id="screen-phone">
+    <div class="topbar">
+      <button class="icon-btn" data-back>→</button>
+      <h1>ورود با شماره موبایل</h1>
+    </div>
+    <div class="login-wrap" style="justify-content:flex-start;padding-top:10px">
+      <div style="text-align:center;font-size:52px;margin-bottom:8px">📱</div>
+      <p class="muted" style="text-align:center;margin-bottom:18px">
+        شماره‌ی موبایل خود را وارد کنید.<br>یک کد ۵ رقمی برایتان پیامک می‌شود.
+      </p>
+      <label class="fld">
+        <span>شماره موبایل</span>
+        <input class="input" id="in-phone" type="tel" inputmode="numeric" maxlength="13"
+               placeholder="09121234567" style="direction:ltr;text-align:center;letter-spacing:2px;font-size:18px">
+      </label>
+      <button class="btn primary" id="btn-send-code">ارسال کد تأیید</button>
+    </div>
+  </section>
+
+  <!-- ============================ کد تأیید ============================ -->
+  <section class="screen" id="screen-otp">
+    <div class="topbar">
+      <button class="icon-btn" data-back>→</button>
+      <h1>کد تأیید</h1>
+    </div>
+    <div class="login-wrap" style="justify-content:flex-start;padding-top:10px">
+      <div style="text-align:center;font-size:52px;margin-bottom:8px">✉️</div>
+      <p class="muted" style="text-align:center;margin-bottom:6px">
+        کد ۵ رقمی ارسال‌شده به شماره‌ی زیر را وارد کنید
+      </p>
+      <div style="text-align:center;font-weight:900;direction:ltr;margin-bottom:16px" id="otp-phone">0912 123 4567</div>
+
+      <div class="otp-boxes" id="otp-boxes">
+        <input class="otp-box" type="tel" inputmode="numeric" maxlength="1">
+        <input class="otp-box" type="tel" inputmode="numeric" maxlength="1">
+        <input class="otp-box" type="tel" inputmode="numeric" maxlength="1">
+        <input class="otp-box" type="tel" inputmode="numeric" maxlength="1">
+        <input class="otp-box" type="tel" inputmode="numeric" maxlength="1">
+      </div>
+
+      <div class="dev-code" id="dev-code" style="display:none"></div>
+
+      <button class="btn primary" id="btn-verify-code" style="margin-top:6px">تأیید و ادامه</button>
+      <button class="btn ghost sm" id="btn-resend" style="margin:12px auto 0;width:auto">ارسال دوباره‌ی کد</button>
+      <button class="btn ghost sm" id="btn-change-phone" style="margin:8px auto 0;width:auto">تغییر شماره</button>
+    </div>
+  </section>
+
+  <!-- ============================ ساخت پروفایل ============================ -->
+  <section class="screen" id="screen-login">
+    <div class="login-wrap">
+      <div class="logo">
+        <div class="dice-logo">🎲</div>
+        <h1>یک قدم مانده!</h1>
+        <p>نام و آواتارت را انتخاب کن</p>
+      </div>
+
+      <div class="welcome-gift">
+        <div style="font-size:26px">🎁</div>
+        <div class="big">۵۰۰ سکه هدیه</div>
+        <div class="muted" style="margin-top:4px">همین حالا به کیف پولت اضافه می‌شود</div>
+      </div>
+
+      <label class="fld">
+        <span>نام نمایشی شما</span>
+        <input class="input" id="in-name" maxlength="16" placeholder="مثلاً: امیر">
+      </label>
+
+      <div class="muted" style="margin-bottom:6px">آواتار خود را انتخاب کنید</div>
+      <div class="avatar-pick" id="avatar-pick"></div>
+
+      <label class="fld">
+        <span>کد معرف (اختیاری)</span>
+        <input class="input" id="in-ref" maxlength="10" placeholder="اگر کد دوستتان را دارید وارد کنید"
+               style="direction:ltr;text-align:center;letter-spacing:3px;text-transform:uppercase">
+      </label>
+
+      <button class="btn primary" id="btn-signup">🎁 دریافت ۵۰۰ سکه و شروع بازی</button>
+    </div>
+  </section>
+
+  <!-- ================================ خانه ================================ -->
+  <section class="screen" id="screen-home">
+    <div class="profile-head">
+      <div class="avatar-lg" id="home-avatar">🦁</div>
+      <div style="flex:1;min-width:0">
+        <div class="nm" id="home-name">بازیکن</div>
+        <div class="lv" id="home-level">سطح ۱</div>
+        <div class="xpbar"><i id="home-xp" style="width:0%"></i></div>
+      </div>
+      <button class="icon-btn" data-go="screen-profile">👤</button>
+      <button class="icon-btn" data-go="screen-settings">⚙️</button>
+    </div>
+
+    <div class="wallet">
+      <div class="chip coins">
+        <span class="ic">🪙</span>
+        <span class="val" id="w-coins">۰</span>
+        <span class="plus" data-go="screen-shop">+</span>
+      </div>
+      <div class="chip energy">
+        <span class="ic">⚡</span>
+        <span class="val" id="w-energy">۰</span>
+        <span class="plus" data-go="screen-prizes">+</span>
+      </div>
+    </div>
+
+    <div class="scroll">
+      <div class="menu-grid">
+        <div class="menu-tile wide hot" id="tile-quick">
+          <span class="ic">🎮</span>
+          <div class="t">بازی سریع</div>
+          <div class="s">سریع‌ترین راه برای پیدا کردن حریف</div>
+        </div>
+
+        <div class="menu-tile" data-go="screen-rooms">
+          <span class="ic">🚪</span>
+          <div class="t">اتاق‌های بازی</div>
+          <div class="s">۱۰۰ تا ۱۰۰٬۰۰۰ سکه</div>
+        </div>
+
+        <div class="menu-tile" data-go="screen-shop">
+          <span class="ic">🛒</span>
+          <div class="t">فروشگاه</div>
+          <div class="s">خرید و فروش سکه</div>
+        </div>
+
+        <div class="menu-tile" data-go="screen-prizes">
+          <span class="ic">🎁</span>
+          <div class="t">جایزه‌ها</div>
+          <div class="s">انرژی‌ات را خرج کن</div>
+          <span class="badge-dot" id="prize-badge" style="display:none">!</span>
+        </div>
+
+        <div class="menu-tile" data-go="screen-invite">
+          <span class="ic">👥</span>
+          <div class="t">دعوت دوستان</div>
+          <div class="s">انرژی و سکه بگیر</div>
+        </div>
+
+        <div class="menu-tile wide" data-go="screen-skins">
+          <span class="ic">🎨</span>
+          <div class="t">پوسته‌های تخته</div>
+          <div class="s" id="skin-sub">تخته‌ات را همان‌طور که دوست داری در بیاور</div>
+        </div>
+
+        <div class="menu-tile wide" id="tile-daily">
+          <span class="ic">📅</span>
+          <div class="t">هدیه‌ی روزانه</div>
+          <div class="s" id="daily-sub">هر روز ۱۰۰ سکه رایگان بگیرید</div>
+        </div>
+      </div>
+
+      <div class="section-title">راهنمای سریع</div>
+      <div class="card">
+        <div class="muted">
+          • با هر بازی، متناسب با سکه‌ای که شرط می‌بندید <b style="color:var(--energy)">انرژی</b> می‌گیرید.<br>
+          • انرژی‌ها را در بخش <b>جایزه‌ها</b> خرج کنید.<br>
+          • در اتاق‌های <b>۱۰۰۰ سکه به بالا</b>، ۱۰٪ مبلغ میز به‌عنوان فی کسر می‌شود.<br>
+          • بردن با <b>مارس</b> ۵۰٪ انرژی بیشتری می‌دهد.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== اتاق‌ها ============================== -->
+  <section class="screen" id="screen-rooms">
+    <div class="topbar">
+      <button class="icon-btn" data-back>→</button>
+      <h1>اتاق‌های بازی</h1>
+    </div>
+    <div class="wallet">
+      <div class="chip coins"><span class="ic">🪙</span><span class="val w-coins">۰</span></div>
+      <div class="chip energy"><span class="ic">⚡</span><span class="val w-energy">۰</span></div>
+    </div>
+    <div class="scroll" id="rooms-list"></div>
+  </section>
+
+  <!-- ============================= مچ‌میکینگ ============================= -->
+  <section class="screen" id="screen-search">
+    <div class="topbar"><h1 id="search-room-name">جست‌وجوی حریف</h1></div>
+    <div class="search-wrap">
+      <div class="vs-row">
+        <div class="vs-card">
+          <div class="av" id="search-me-av">🦁</div>
+          <div class="nm" id="search-me-nm">شما</div>
+          <div class="lv" id="search-me-lv">سطح ۱</div>
+        </div>
+        <div class="vs-mid">VS</div>
+        <div class="vs-card">
+          <div class="av searching" id="search-opp-av">❓</div>
+          <div class="nm" id="search-opp-nm">در انتظار…</div>
+          <div class="lv" id="search-opp-lv">—</div>
+        </div>
+      </div>
+      <div class="dots"><span></span><span></span><span></span></div>
+      <div class="muted" id="search-status">در حال اتصال به سرور…</div>
+      <div class="stake-badge"><div class="n" id="search-stake">۰</div><div class="u">سکه ورودی</div></div>
+      <button class="btn ghost" id="btn-cancel-search" style="max-width:220px">انصراف</button>
+    </div>
+  </section>
+
+  <!-- ============================== صفحه بازی ============================== -->
+  <section class="screen" id="screen-game">
+    <div class="game-top">
+      <div class="player-tag" id="tag-opp">
+        <div class="av">🐯</div>
+        <div style="min-width:0">
+          <div class="nm">حریف</div>
+          <div class="pip">پیپ ۱۶۷</div>
+        </div>
+        <div class="turn-bar"><i></i></div>
+      </div>
+      <div class="stake-badge"><div class="n" id="game-stake">۰</div><div class="u">جایزه</div></div>
+      <div class="player-tag right" id="tag-me">
+        <div style="min-width:0;text-align:left">
+          <div class="nm">شما</div>
+          <div class="pip">پیپ ۱۶۷</div>
+        </div>
+        <div class="av">🦁</div>
+        <div class="turn-bar"><i></i></div>
+      </div>
+    </div>
+
+    <div class="chat-strip" id="chat-strip"></div>
+
+    <div class="board-wrap">
+      <div class="board" id="board">
+        <div class="board-main" id="board-main">
+          <div class="quad" id="quad-left"></div>
+          <div class="bar-strip" id="bar-strip">
+            <div class="bar-half" id="bar-top"></div>
+            <div class="bar-half" id="bar-bottom"></div>
+          </div>
+          <div class="quad" id="quad-right"></div>
+          <div class="dice-area" id="dice-area"></div>
+        </div>
+        <div class="off-tray">
+          <div class="off-half top" id="off-p2"><div class="lbl">۰</div></div>
+          <div class="off-half bottom" id="off-p1"><div class="lbl">۰</div></div>
+        </div>
+        <div class="cube-box" id="cube-box" style="display:none">۲</div>
+      </div>
+    </div>
+
+    <div class="conn-overlay" id="conn-overlay">
+      <div class="conn-card">
+        <div class="conn-spin"></div>
+        <div class="conn-title" id="conn-title">اتصال قطع شد</div>
+        <div class="conn-sub" id="conn-sub">در حال برگشتن به بازی…</div>
+        <div class="conn-count" id="conn-count">۴۵</div>
+        <button class="btn ghost sm" id="conn-quit" style="margin:14px auto 0">خروج از بازی</button>
+      </div>
+    </div>
+
+    <div class="game-bottom">
+      <button class="icon-btn" id="btn-game-menu">☰</button>
+      <button class="btn ghost" id="btn-undo" style="max-width:90px">↶ برگرد</button>
+      <button class="btn primary" id="btn-action">🎲 تاس بریز</button>
+    </div>
+  </section>
+
+  <!-- ============================== فروشگاه ============================== -->
+  <section class="screen" id="screen-shop">
+    <div class="topbar">
+      <button class="icon-btn" data-back>→</button>
+      <h1>فروشگاه</h1>
+    </div>
+    <div class="wallet">
+      <div class="chip coins"><span class="ic">🪙</span><span class="val w-coins">۰</span></div>
+      <div class="chip energy"><span class="ic">⚡</span><span class="val w-energy">۰</span></div>
+    </div>
+    <div class="scroll">
+      <div class="row" style="margin-bottom:14px">
+        <button class="btn primary sm" id="tab-buy" style="flex:1">خرید سکه</button>
+        <button class="btn ghost sm" id="tab-sell" style="flex:1">فروش سکه</button>
+      </div>
+      <div id="shop-buy"></div>
+      <div id="shop-sell" style="display:none"></div>
+    </div>
+  </section>
+
+  <!-- =============================== جایزه‌ها =============================== -->
+  <section class="screen" id="screen-prizes">
+    <div class="topbar">
+      <button class="icon-btn" data-back>→</button>
+      <h1>جایزه‌ها</h1>
+    </div>
+    <div class="wallet">
+      <div class="chip energy" style="flex:2"><span class="ic">⚡</span><span class="val w-energy">۰</span></div>
+      <div class="chip coins"><span class="ic">🪙</span><span class="val w-coins">۰</span></div>
+    </div>
+    <div class="scroll">
+      <div class="card">
+        <h3>⚡ انرژی چطور به دست می‌آید؟</h3>
+        <div class="muted">
+          به ازای هر <b>۱۰۰ سکه</b> که در بازی شرط می‌بندید، <b>۱ انرژی</b> می‌گیرید — چه ببرید چه ببازید.<br>
+          اگر حریف را <b>مارس</b> کنید، ۵۰٪ انرژی بیشتر می‌گیرید.<br>
+          با <b>دعوت هر دوست</b>، ۱۵۰ انرژی هدیه می‌گیرید.
+        </div>
+      </div>
+      <div class="section-title">جایزه‌ها</div>
+      <div id="prizes-list"></div>
+      <div class="section-title">درخواست‌های من</div>
+      <div id="claims-list"><div class="muted" style="text-align:center;padding:14px">هنوز درخواستی ثبت نشده</div></div>
+    </div>
+  </section>
+
+  <!-- ============================= دعوت دوستان ============================= -->
+  <section class="screen" id="screen-invite">
+    <div class="topbar">
+      <button class="icon-btn" data-back>→</button>
+      <h1>دعوت دوستان</h1>
+    </div>
+    <div class="scroll">
+      <div class="card" style="text-align:center">
+        <div style="font-size:48px">👥</div>
+        <h3 style="margin-top:6px">دوستانت را دعوت کن، جایزه بگیر</h3>
+        <div class="muted" style="margin-bottom:14px">
+          به ازای هر دوستی که با کد شما ثبت‌نام کند:<br>
+          <b style="color:var(--energy)">۱۵۰ انرژی</b> + <b style="color:var(--gold)">۲۰۰ سکه</b> برای شما<br>
+          <b style="color:var(--gold)">۳۰۰ سکه</b> هدیه برای دوستتان
+        </div>
+        <div class="invite-code"><span id="my-code">-------</span></div>
+        <div class="row">
+          <button class="btn blue" id="btn-copy-code">📋 کپی کد</button>
+          <button class="btn green" id="btn-share">📤 اشتراک‌گذاری</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>آمار دعوت‌های شما</h3>
+        <div class="stat-grid">
+          <div class="stat"><div class="n" id="inv-count">۰</div><div class="l">دوست دعوت‌شده</div></div>
+          <div class="stat"><div class="n" id="inv-energy" style="color:var(--energy)">۰</div><div class="l">انرژی دریافتی</div></div>
+        </div>
+      </div>
+
+      <div class="card" id="ref-input-card">
+        <h3>کد معرف دارید؟</h3>
+        <div class="muted" style="margin-bottom:10px">اگر دوستی شما را دعوت کرده، کدش را وارد کنید و ۳۰۰ سکه هدیه بگیرید.</div>
+        <label class="fld">
+          <input class="input" id="in-ref2" maxlength="10" placeholder="کد معرف"
+                 style="direction:ltr;text-align:center;letter-spacing:3px;text-transform:uppercase">
+        </label>
+        <button class="btn primary" id="btn-apply-ref">ثبت کد</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- =============================== پوسته‌ها =============================== -->
+  <section class="screen" id="screen-skins">
+    <div class="topbar">
+      <button class="icon-btn" data-back>→</button>
+      <h1>پوسته‌های تخته</h1>
+    </div>
+    <div class="wallet">
+      <div class="chip coins"><span class="ic">🪙</span><span class="val w-coins">۰</span></div>
+      <div class="chip energy"><span class="ic">⚡</span><span class="val w-energy">۰</span></div>
+    </div>
+    <div class="scroll">
+      <div class="card" style="padding:10px 12px">
+        <div class="muted" style="font-size:12px">
+          پوسته‌ی انتخابی شما در اتاق‌های مبتدی تا نقره‌ای استفاده می‌شود.<br>
+          اتاق‌های <b>طلایی، الماس و افسانه‌ای</b> پوسته‌ی اختصاصی خودشان را دارند — رایگان و فقط داخل همان اتاق.
+        </div>
+      </div>
+      <div id="skins-list"></div>
+    </div>
+  </section>
+
+  <!-- =============================== پروفایل =============================== -->
+  <section class="screen" id="screen-profile">
+    <div class="topbar">
+      <button class="icon-btn" data-back>→</button>
+      <h1>پروفایل من</h1>
+    </div>
+    <div class="scroll">
+      <div class="card" style="text-align:center">
+        <div class="avatar-lg gold" id="pf-avatar" style="margin:0 auto 10px;width:70px;height:70px;font-size:36px">🦁</div>
+        <div style="font-weight:900;font-size:18px" id="pf-name">بازیکن</div>
+        <div class="muted" id="pf-level">سطح ۱</div>
+        <div class="xpbar" style="width:100%;margin-top:10px"><i id="pf-xp" style="width:0%"></i></div>
+        <div class="muted" id="pf-xp-txt" style="margin-top:5px"></div>
+      </div>
+
+      <div class="section-title">آمار بازی</div>
+      <div class="card">
+        <div class="stat-grid">
+          <div class="stat"><div class="n" id="st-games">۰</div><div class="l">کل بازی‌ها</div></div>
+          <div class="stat"><div class="n" id="st-wins" style="color:var(--green)">۰</div><div class="l">برد</div></div>
+          <div class="stat"><div class="n" id="st-losses" style="color:var(--red)">۰</div><div class="l">باخت</div></div>
+          <div class="stat"><div class="n" id="st-mars" style="color:var(--purple)">۰</div><div class="l">مارس</div></div>
+          <div class="stat"><div class="n" id="st-rate" style="color:var(--blue)">۰٪</div><div class="l">درصد برد</div></div>
+          <div class="stat"><div class="n" id="st-best" style="color:var(--gold)">۰</div><div class="l">بزرگ‌ترین برد</div></div>
+        </div>
+      </div>
+
+      <div class="section-title">تاریخچه‌ی تراکنش‌ها</div>
+      <div class="card" id="tx-list"></div>
+    </div>
+  </section>
+
+  <!-- =============================== تنظیمات =============================== -->
+  <section class="screen" id="screen-settings">
+    <div class="topbar">
+      <button class="icon-btn" data-back>→</button>
+      <h1>تنظیمات</h1>
+    </div>
+    <div class="scroll">
+      <div class="card">
+        <h3>بازی</h3>
+        <div class="row" style="margin-bottom:10px;align-items:center">
+          <div>صدا</div>
+          <button class="btn sm" id="set-sound" style="flex:0 0 90px">روشن</button>
+        </div>
+        <div class="row" style="margin-bottom:10px;align-items:center">
+          <div>لرزش</div>
+          <button class="btn sm" id="set-vibrate" style="flex:0 0 90px">روشن</button>
+        </div>
+        <div class="row" style="align-items:center">
+          <div>تاس خودکار</div>
+          <button class="btn sm" id="set-autoroll" style="flex:0 0 90px">خاموش</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>اتصال</h3>
+        <label class="fld">
+          <span>نشانی سرور بازی (اختیاری)</span>
+          <input class="input" id="set-server" placeholder="ws://192.168.1.5:8080" style="direction:ltr;text-align:left">
+        </label>
+        <button class="btn sm blue" id="btn-save-server">ذخیره</button>
+        <div class="muted" style="margin-top:10px">
+          اگر خالی بگذارید یا سرور در دسترس نباشد، بازی به‌صورت خودکار با حریف رباتی انجام می‌شود.
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>قوانین اقتصاد بازی</h3>
+        <div class="muted" id="rules-text"></div>
+      </div>
+
+      <div class="card">
+        <h3>حساب کاربری</h3>
+        <button class="btn red" id="btn-reset">پاک کردن اطلاعات و شروع دوباره</button>
+      </div>
+
+      <div class="muted" style="text-align:center;padding:10px">نسخه ۱٫۰٫۰</div>
+    </div>
+  </section>
+
+</div>
+
+<div class="modal-bg" id="modal-bg"><div class="modal" id="modal"></div></div>
+<div id="toast-host"></div>
+<div id="fly-layer" class="fx-layer"></div>
+
+<script src="js/engine.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/store.js"></script>
+<script src="js/net.js"></script>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/payment.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>

@@ -1,0 +1,118 @@
+name: بررسی کد
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  server:
+    name: سرور و موتور بازی
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: بررسی نحوی همه‌ی فایل‌های سرور و کلاینت
+        run: |
+          for f in server/*.js www/js/*.js; do
+            node --check "$f" || exit 1
+          done
+          echo "✓ همه‌ی فایل‌ها سالم"
+
+      - name: تست موتور بازی — ۳۰۰ بازی شبیه‌سازی‌شده
+        run: |
+          node -e "
+          const E = require('./www/js/engine.js');
+          const AI = require('./www/js/ai.js');
+          let errors = 0, games = 0;
+          for (let i = 0; i < 300; i++) {
+            const st = E.newState({ cubeEnabled: false });
+            const op = E.openingRoll();
+            st.turn = op.first;
+            E.rollDice(st, null, [op.d1, op.d2]);
+            let guard = 0;
+            while (!st.done) {
+              if (++guard > 3000) { errors++; break; }
+              if (!st.dice.length) E.rollDice(st);
+              const pick = AI.chooseTurn(st, st.turn, 'normal');
+              if (pick) for (const mv of pick.seq) E.applyMove(st, st.turn, mv);
+              // هر بازیکن باید همیشه دقیقاً ۱۵ مهره داشته باشد
+              let a = st.bar[1] + st.off[1], b = st.bar[-1] + st.off[-1];
+              for (let k = 0; k < 24; k++) st.board[k] > 0 ? a += st.board[k] : b -= st.board[k];
+              if (a !== 15 || b !== 15) { errors++; break; }
+              E.endTurn(st);
+            }
+            games++;
+          }
+          console.log(\`بازی‌ها: \${games} | خطا: \${errors}\`);
+          if (errors) process.exit(1);
+          "
+
+      - name: تست قانون تاس — باید هر دو تاس قابل انتخاب باشند
+        run: |
+          node -e "
+          const E = require('./www/js/engine.js');
+          let bad = 0;
+          for (const dice of [[5,3],[6,1],[4,2],[6,5]]) {
+            const st = E.newState({});
+            st.turn = 1;
+            E.rollDice(st, null, dice);
+            const dies = new Set(E.legalFirstMoves(st, 1).map(m => m.die));
+            if (dies.size < 2) { console.log('✗ با تاس', dice, 'فقط', [...dies], 'قابل بازی است'); bad++; }
+          }
+          if (bad) process.exit(1);
+          console.log('✓ هر دو تاس در چیدمان اولیه قابل انتخاب‌اند');
+          "
+
+      - name: تست دیتابیس — سکه نباید گم یا ساخته شود
+        run: |
+          node -e "
+          process.env.NARD_DATA = '/tmp/citest';
+          const D = require('./server/db.js');
+          const a = D.createUser({ name: 'a', ip: '1.1.1.1' });
+          const b = D.createUser({ name: 'b', ip: '2.2.2.2' });
+          D.wallet(a.id, { coins: 10000, type: 'admin' });
+          D.wallet(b.id, { coins: 10000, type: 'admin' });
+          const g = D.startGame({ roomId: 'r1000', entry: 1000, p1Id: a.id, p2Id: b.id, vsBot: 0 });
+          if (!D.stake(a.id, 1000, 'r1000', g).ok) throw new Error('ورودی کسر نشد');
+          if (!D.stake(b.id, 1000, 'r1000', g).ok) throw new Error('ورودی کسر نشد');
+          D.settleGame({ gameId: g, roomId: 'r1000', entry: 1000, winnerId: a.id, loserId: b.id, result: 1 });
+          const sum = D.db.prepare('SELECT SUM(coins) n FROM users').get().n;
+          const rake = D.db.prepare('SELECT SUM(rake) n FROM games').get().n;
+          console.log('سکه:', sum, '+ فی:', rake, '=', sum + rake);
+          if (sum + rake !== 20000) { console.log('✗ سکه گم شد یا ساخته شد'); process.exit(1); }
+          if (D.wallet(a.id, { coins: -99999999, type: 'stake' }).ok) { console.log('✗ موجودی منفی شد'); process.exit(1); }
+          console.log('✓ اقتصاد سالم است');
+          "
+
+  web:
+    name: سایت و پنل
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: نصب وابستگی‌ها
+        working-directory: web
+        run: npm install
+
+      - name: بررسی TypeScript
+        working-directory: web
+        run: npx tsc --noEmit
+
+      - name: build
+        working-directory: web
+        env:
+          NEXT_PUBLIC_SITE_URL: https://nard.app
+          NEXT_PUBLIC_API_URL: http://localhost:8080
+        run: npm run build

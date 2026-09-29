@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+/* =====================================================================
+ *  پالت — همان رنگ‌های اپ بازی تا سایت و بازی یک خانواده به نظر برسند
+ * ===================================================================== */
+
+@theme {
+  --color-ink-950: #070b14;
+  --color-ink-900: #0b1220;
+  --color-ink-800: #111a2e;
+  --color-ink-700: #16203a;
+  --color-ink-600: #1d2a49;
+  --color-ink-500: #26355a;
+  --color-ink-300: #93a3c4;
+  --color-ink-100: #e8eefc;
+
+  --color-gold-400: #f5c451;
+  --color-gold-500: #d9a125;
+  --color-gold-300: #ffe6a3;
+
+  --color-felt-500: #0f4d3c;
+  --color-felt-400: #125946;
+  --color-wood-500: #6b3f22;
+
+  --color-mint-400: #22c98a;
+  --color-mint-300: #5ff0b6;
+  --color-rose-400: #f2555a;
+  --color-sky-400: #4aa8ff;
+  --color-violet-400: #a78bfa;
+  --color-energy-400: #7be3ff;
+
+  --font-sans: var(--font-vazir), Vazirmatn, Tahoma, system-ui, sans-serif;
+}
+
+/* =====================================================================
+ *  پایه
+ * ===================================================================== */
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-ink-900);
+  color: var(--color-ink-100);
+  font-family: var(--font-sans);
+  font-feature-settings: 'ss01';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* اعداد فارسی در همه‌ی متن‌های سایت */
+.fa-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--color-gold-400);
+  color: #2a1e04;
+}
+
+/* نوار اسکرول تیره */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--color-ink-900); }
+::-webkit-scrollbar-thumb { background: var(--color-ink-500); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-ink-300); }
+
+/* =====================================================================
+ *  اجزای تکرارشونده
+ * ===================================================================== */
+
+@utility card-surface {
+  background: linear-gradient(165deg, var(--color-ink-700), var(--color-ink-600));
+  border: 1px solid var(--color-ink-500);
+}
+
+/* پس‌زمینه‌ی درخشان صفحه‌ی اصلی */
+.hero-glow::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(900px 500px at 80% -10%, rgba(74, 168, 255, 0.18), transparent 60%),
+    radial-gradient(700px 500px at 10% 110%, rgba(245, 196, 81, 0.14), transparent 60%);
+  pointer-events: none;
+}
+
+/* تخته‌ی کوچک تزئینی */
+.mini-board {
+  background: linear-gradient(160deg, #7c4a28, var(--color-wood-500) 40%, #4a2a15);
+}
+.mini-felt {
+  background: linear-gradient(170deg, var(--color-felt-400), var(--color-felt-500) 50%, #0b3d30);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

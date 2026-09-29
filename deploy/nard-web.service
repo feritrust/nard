@@ -1,0 +1,32 @@
+# سرویس سایت و پنل مدیریت (Next.js)
+# نصب:
+#   sudo cp deploy/nard-web.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now nard-web
+
+[Unit]
+Description=Nard Website and Admin Panel
+After=network.target nard-server.service
+
+[Service]
+Type=simple
+User=nard
+Group=nard
+WorkingDirectory=/opt/nard/web
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=5
+
+Environment=NODE_ENV=production
+Environment=PORT=3000
+EnvironmentFile=-/opt/nard/web/.env.production
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nard-web
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

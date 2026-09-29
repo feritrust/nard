@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- مثلث‌های تخته -->
+    <path android:fillColor="#e4c79a" android:pathData="M26,24 L38,24 L32,54 Z" />
+    <path android:fillColor="#b8562f" android:pathData="M40,24 L52,24 L46,54 Z" />
+    <path android:fillColor="#e4c79a" android:pathData="M56,84 L68,84 L62,54 Z" />
+    <path android:fillColor="#b8562f" android:pathData="M70,84 L82,84 L76,54 Z" />
+    <!-- تاس -->
+    <path android:fillColor="#fdfaf2" android:pathData="M44,44 m0,6 a6,6 0 0,1 6,-6 h14 a6,6 0 0,1 6,6 v14 a6,6 0 0,1 -6,6 h-14 a6,6 0 0,1 -6,-6 z" />
+    <path android:fillColor="#1e2436" android:pathData="M52,52 m-2.6,0 a2.6,2.6 0 1,0 5.2,0 a2.6,2.6 0 1,0 -5.2,0" />
+    <path android:fillColor="#1e2436" android:pathData="M62,62 m-2.6,0 a2.6,2.6 0 1,0 5.2,0 a2.6,2.6 0 1,0 -5.2,0" />
+    <path android:fillColor="#1e2436" android:pathData="M57,57 m-2.6,0 a2.6,2.6 0 1,0 5.2,0 a2.6,2.6 0 1,0 -5.2,0" />
+</vector>

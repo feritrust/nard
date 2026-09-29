@@ -1,0 +1,44 @@
+# سرویس سرور بازی
+# نصب:
+#   sudo cp deploy/nard-server.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now nard-server
+
+[Unit]
+Description=Nard Game Server
+Documentation=https://github.com/USERNAME/nard
+After=network.target
+
+[Service]
+Type=simple
+User=nard
+Group=nard
+WorkingDirectory=/opt/nard/server
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+
+# متغیرها — یا اینجا، یا در فایل .env کنار server.js
+Environment=NODE_ENV=production
+Environment=PORT=8080
+EnvironmentFile=-/opt/nard/server/.env
+
+# لاگ‌ها در journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=nard-server
+
+# سخت‌گیری امنیتی
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# فقط پوشه‌ی دیتابیس قابل نوشتن باشد
+ReadWritePaths=/opt/nard/server/data
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

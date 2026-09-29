@@ -1,0 +1,14 @@
+{
+  "name": "nard-server",
+  "version": "1.0.0",
+  "description": "سرور بازی آنلاین تخته‌نرد — مچ‌میکینگ، داوری بازی و ربات جایگزین",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "license": "MIT",
+  "private": true
+}
