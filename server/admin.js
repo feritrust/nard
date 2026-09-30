@@ -45,7 +45,15 @@ function adminUserRow(u) {
 }
 
 async function handle(req, res, url) {
-  const path = url.pathname;
+  /* مسیرهای API ادمین با /admin/ شروع می‌شوند، ولی صفحه‌های خود پنل
+   * (Next.js) هم روی همان /admin/ هستند. پشت nginx این دو با هم تداخل
+   * می‌کنند: درخواست /admin/login به‌جای JSON، صفحه‌ی HTML برمی‌گرداند.
+   *
+   * راه‌حل: پنل با پیشوند /adminapi/ صدا می‌زند و ما همان‌جا به /admin/
+   * ترجمه‌اش می‌کنیم. هر دو شکل کار می‌کنند تا در حالت توسعه (بدون nginx)
+   * هم چیزی نشکند. */
+  let path = url.pathname;
+  if (path.startsWith('/adminapi/')) path = '/admin/' + path.slice(10);
   if (!path.startsWith('/admin/')) return false;
 
   const ip = clientIp(req);

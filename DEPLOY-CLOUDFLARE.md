@@ -248,6 +248,7 @@ journalctl -u nard-server -n 50 --no-pager
 | `https://farhadtest.ir` | صفحه‌ی لندینگ |
 | `https://farhadtest.ir/play` | خود بازی |
 | `https://farhadtest.ir/admin` | ورود پنل مدیریت |
+| `https://farhadtest.ir/adminapi/me` | `{"ok":false,...}` — یعنی API ادمین جواب می‌دهد |
 | `https://farhadtest.ir/health` | `{"ok":true,...}` |
 
 **تست وب‌سوکت** — در کنسول مرورگر:
@@ -314,6 +315,8 @@ systemctl restart nard-server nard-web
 | با هر شماره‌ای می‌شود وارد شد | `NARD_DEV_CODE` صفر نیست | `.env` را درست کنید و `systemctl restart nard-server` |
 | build سایت kill می‌شود | RAM کم | swap بسازید (مرحله‌ی ۳) |
 | `no "ssl_certificate" is defined` | پیکربندی SSL قبل از گرفتن گواهی نصب شده | `sudo bash deploy/enable-ssl.sh` |
+| پنل ادمین لاگین نمی‌شود / خطای JSON | nginx مسیر API ادمین را به Next.js می‌دهد | نسخه‌ی به‌روز را pull کنید (API حالا `/adminapi/` است) |
+| `/health` خطای ۴۰۴ می‌دهد | مسیر در nginx تعریف نشده | نسخه‌ی به‌روز را pull کنید |
 | `cannot stat cloudflare-realip.conf` | کد سرور قدیمی است | `cd /opt/nard && git pull` |
 
 ---

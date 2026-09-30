@@ -27,11 +27,18 @@ export class ApiError extends Error {
   }
 }
 
+/* صفحه‌های پنل روی /admin/... هستند و API سرور هم همان مسیر را دارد.
+ * پشت nginx این دو تداخل می‌کنند، پس API را با پیشوند /adminapi/ صدا
+ * می‌زنیم؛ سرور هر دو شکل را می‌پذیرد. */
+function apiPath(path: string) {
+  return path.startsWith('/admin/') ? '/adminapi/' + path.slice(7) : path;
+}
+
 async function call<T = any>(path: string, opts: { method?: string; body?: any } = {}): Promise<T> {
   const token = getToken();
   let res: Response;
   try {
-    res = await fetch(api.base + path, {
+    res = await fetch(api.base + apiPath(path), {
       method: opts.method || 'GET',
       headers: {
         'Content-Type': 'application/json',
