@@ -485,6 +485,8 @@ async function sendSms(phone, code) {
 
 راهنمای کامل قدم‌به‌قدم در **[DEPLOY.md](DEPLOY.md)** است — از خرید سرور تا SSL و پشتیبان‌گیری.
 
+اگر DNS دامنه روی **کلادفلر** است، به‌جای آن **[DEPLOY-CLOUDFLARE.md](DEPLOY-CLOUDFLARE.md)** را دنبال کنید؛ چند تنظیم هست (حالت SSL، IP واقعی کاربر، وب‌سوکت) که اگر رد شوند بازی یا ضدتقلب از کار می‌افتد.
+
 خلاصه:
 
 ```bash
@@ -498,7 +500,7 @@ sudo -u nard node create-admin.js owner '<رمز>' owner
 
 # دامنه و SSL
 sudo cp deploy/nginx-nard.conf /etc/nginx/sites-available/nard
-sudo certbot --nginx -d nard.example.com
+sudo certbot --nginx -d farhadtest.ir
 ```
 
 > ⚠️ **Vercel و هاست‌های آمریکایی IP ایران را مسدود می‌کنند.** برای اپ فارسی،

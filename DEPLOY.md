@@ -186,8 +186,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```bash
 cd /opt/nard/web
 cat > .env.production <<'EOF'
-NEXT_PUBLIC_SITE_URL=https://nard.example.com
-NEXT_PUBLIC_API_URL=https://nard.example.com
+NEXT_PUBLIC_SITE_URL=https://farhadtest.ir
+NEXT_PUBLIC_API_URL=https://farhadtest.ir
 EOF
 npm run build          # بعد از تغییر متغیرها باید دوباره build شود
 sudo systemctl restart nard-web
@@ -216,16 +216,16 @@ sudo systemctl restart nard-server
 در پنل دامنه، یک رکورد A بسازید:
 
 ```
-nard.example.com   A   <IP سرور>
+farhadtest.ir   A   <IP سرور>
 ```
 
-چند دقیقه تا چند ساعت طول می‌کشد. با `dig nard.example.com +short` بررسی کنید.
+چند دقیقه تا چند ساعت طول می‌کشد. با `dig farhadtest.ir +short` بررسی کنید.
 
 ### nginx
 
 ```bash
 sudo cp /opt/nard/deploy/nginx-nard.conf /etc/nginx/sites-available/nard
-sudo nano /etc/nginx/sites-available/nard      # nard.example.com را عوض کنید
+sudo nano /etc/nginx/sites-available/nard      # farhadtest.ir را عوض کنید
 
 # اگر proxy_params ندارید
 sudo cp /opt/nard/deploy/proxy_params /etc/nginx/proxy_params
@@ -239,20 +239,20 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d nard.example.com
+sudo certbot --nginx -d farhadtest.ir
 ```
 
 تمدید خودکار است. برای اطمینان: `sudo certbot renew --dry-run`
 
 ### وصل کردن بازی به وب‌سوکت
 
-بعد از SSL، نشانی وب‌سوکت می‌شود `wss://nard.example.com`. چون خود سرور بازی
+بعد از SSL، نشانی وب‌سوکت می‌شود `wss://farhadtest.ir`. چون خود سرور بازی
 فایل‌های اپ را سرو می‌کند، اپ به‌طور خودکار به همان دامنه وصل می‌شود و کاری لازم نیست.
 
 برای **اپ اندروید** در `android/app/src/main/java/com/nard/pro/MainActivity.kt`:
 
 ```kotlin
-private val defaultServerUrl = "wss://nard.example.com"
+private val defaultServerUrl = "wss://farhadtest.ir"
 ```
 
 ---
@@ -323,7 +323,7 @@ sudo systemctl restart nard-server nard-web
 - [ ] پورت‌های ۸۰۸۰ و ۳۰۰۰ از بیرون بسته‌اند (`sudo ufw status`)
 - [ ] پشتیبان‌گیری خودکار تنظیم شده و یک‌بار دستی تست شده
 - [ ] یک نسخه‌ی پشتیبان بیرون از سرور دارید
-- [ ] `https://nard.example.com/admin` در گوگل ایندکس نمی‌شود (`robots.txt` را چک کنید)
+- [ ] `https://farhadtest.ir/admin` در گوگل ایندکس نمی‌شود (`robots.txt` را چک کنید)
 - [ ] ورود، بازی، خرید و درخواست فروش را یک‌بار خودتان تست کرده‌اید
 - [ ] تکلیف حقوقی بخش فروش سکه روشن است
 

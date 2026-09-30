@@ -46,6 +46,10 @@ const API = require('./api.js');
 const ADMIN = require('./admin.js');
 
 const PORT = process.env.PORT || 8080;
+/* روی سرور واقعی باید 127.0.0.1 باشد تا فقط nginx به آن برسد.
+ * اگر روی 0.0.0.0 بماند، کسی می‌تواند مستقیم به IP:8080 وصل شود و
+ * هدر CF-Connecting-IP را جعل کند (فرار از فیلتر مولتی‌اکانت و محدودیت پیامک). */
+const HOST = process.env.NARD_HOST || '0.0.0.0';
 const WWW = path.join(__dirname, '..', 'www');
 const SESSION_SECRET = process.env.NARD_SECRET || crypto.randomBytes(24).toString('hex');
 
@@ -86,12 +90,24 @@ class WsConn {
     });
     socket.on('error', () => this._die());
     socket.on('close', () => this._die());
+
+    /* ضربان (ping) هر ۳۰ ثانیه.
+     * چرا لازم است: کلادفلر و خیلی از پراکسی‌ها اتصال وب‌سوکتِ بی‌ترافیک را
+     * بعد از حدود ۱۰۰ ثانیه می‌بندند. وقتی حریف دارد فکر می‌کند یا بازیکن
+     * در صف نشسته، هیچ پیامی رد و بدل نمی‌شود و اتصال الکی قطع می‌شود.
+     * فریم ping استاندارد است و مرورگر خودش خودکار pong می‌دهد. */
+    this._ping = setInterval(() => {
+      if (this._closed) return;
+      this._frame(0x9, Buffer.alloc(0));
+    }, 30000);
+    if (this._ping.unref) this._ping.unref();
   }
 
   _die() {
     if (this._closed) return;
     this._closed = true;
     this.readyState = 3;
+    if (this._ping) { clearInterval(this._ping); this._ping = null; }
     if (this.onclose) { try { this.onclose(); } catch (e) {} }
   }
 
@@ -209,8 +225,8 @@ server.on('upgrade', (req, socket) => {
   );
   socket.setNoDelay(true);
   const conn = new WsConn(socket);
-  const fwd = req.headers['x-forwarded-for'];
-  conn.ip = fwd ? String(fwd).split(',')[0].trim() : (socket.remoteAddress || null);
+  // همان منطق REST — پشت کلادفلر باید CF-Connecting-IP خوانده شود
+  conn.ip = API.clientIp(req) || socket.remoteAddress || null;
   handleConnection(conn);
 });
 
@@ -772,7 +788,7 @@ function handleConnection(ws) {
 
 /* ------------------------------------------------------------- اجرا */
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   console.log('╭──────────────────────────────────────────────╮');
   console.log('│  سرور تخته‌نرد در حال اجراست                  │');
   console.log('╰──────────────────────────────────────────────╯');
@@ -783,6 +799,10 @@ server.listen(PORT, () => {
   console.log('  مهلت هر نوبت: ' + (CONFIG.turnMs / 1000) + ' ثانیه • مهلت بازگشت بعد از قطعی: ' + (CONFIG.reconnectMs / 1000) + ' ثانیه');
   console.log('  ورود با شماره موبایل فعال است. کد تأیید در همین کنسول چاپ می‌شود.');
   if (API.AUTH.devReturnCode) console.log('  ⚠️  حالت توسعه: کد تأیید در پاسخ سرور هم برمی‌گردد. برای انتشار NARD_DEV_CODE=0 بگذارید.');
+  if (process.env.NARD_TRUST_PROXY !== '0' && !/^(127\.|::1|localhost)/.test(HOST)) {
+    console.log('  ⚠️  سرور روی ' + HOST + ' گوش می‌دهد و هدرهای پراکسی را باور می‌کند.');
+    console.log('      پشت nginx حتماً NARD_HOST=127.0.0.1 بگذارید، وگرنه IP کاربر قابل جعل است.');
+  }
   console.log('  پنل ادمین: اول یک ادمین بسازید →  node create-admin.js <نام‌کاربری> <رمز> owner');
 });
 

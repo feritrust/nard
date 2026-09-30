@@ -420,7 +420,15 @@
   /* ------------------------------------------------------ دعوت دوستان */
 
   function inviteLink() {
-    return 'https://nard.app/i/' + profile.referralCode;
+    /* از نشانی همان جایی که اپ باز شده استفاده می‌کنیم تا با هر دامنه‌ای
+     * کار کند. در اپ اندروید (file://) به دامنه‌ی پیش‌فرض برمی‌گردیم. */
+    var base = 'https://farhadtest.ir';
+    try {
+      if (typeof location !== 'undefined' && /^https?:$/.test(location.protocol)) {
+        base = location.origin;
+      }
+    } catch (e) {}
+    return base + '/i/' + profile.referralCode;
   }
 
   function inviteText() {

@@ -8,7 +8,7 @@
 export const site = {
   name: 'تخته‌نرد حرفه‌ای',
   shortName: 'تخته‌نرد',
-  domain: process.env.NEXT_PUBLIC_SITE_URL || 'https://nard.app',
+  domain: process.env.NEXT_PUBLIC_SITE_URL || 'https://farhadtest.ir',
   tagline: 'بازی آنلاین تخته‌نرد با حریف‌های واقعی',
   description:
     'تخته‌نرد آنلاین فارسی با حریف واقعی، اتاق‌های مختلف، جایزه و سیستم انرژی. ' +
@@ -21,7 +21,7 @@ export const site = {
   telegram: 'https://t.me/nard_app_bot',
   apk: '/download/nard.apk',
   play: '/play',
-  support: 'support@nard.app',
+  support: 'support@farhadtest.ir',
   locale: 'fa_IR'
 };
 

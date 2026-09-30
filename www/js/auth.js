@@ -40,7 +40,12 @@
   function serverBase() {
     var url = (root.Net && root.Net.config && root.Net.config.serverUrl) || '';
     if (!url) return '';
-    return url.replace(/^ws:/, 'http:').replace(/^wss:/, 'https:').replace(/\/+$/, '');
+    return url
+      .replace(/^ws:/, 'http:')
+      .replace(/^wss:/, 'https:')
+      .replace(/\/+$/, '')
+      // نشانی وب‌سوکت پشت nginx به /ws ختم می‌شود؛ مسیرهای REST آنجا نیستند
+      .replace(/\/ws$/, '');
   }
 
   /* ------------------------------------------------- حالت محلی (آفلاین) */

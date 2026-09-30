@@ -31,7 +31,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var web: WebView
 
     /** اگر می‌خواهید اپ به سرور آنلاین وصل شود، اینجا نشانی را بگذارید. */
-    private val defaultServerUrl = ""      // مثال: "wss://nard.example.com"
+    private val defaultServerUrl = "wss://farhadtest.ir/ws"
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {

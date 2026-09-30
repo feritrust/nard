@@ -113,6 +113,6 @@ jobs:
       - name: build
         working-directory: web
         env:
-          NEXT_PUBLIC_SITE_URL: https://nard.app
+          NEXT_PUBLIC_SITE_URL: https://farhadtest.ir
           NEXT_PUBLIC_API_URL: http://localhost:8080
         run: npm run build

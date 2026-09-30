@@ -35,9 +35,32 @@ function readBody(req, limit = 16384) {
   });
 }
 
+/**
+ * IP واقعیِ بازیکن.
+ *
+ * ⚠️ چرا مهم است: تشخیص تقلب (چند حساب از یک IP) و پاداش دعوت دوستان روی
+ * همین مقدار حساب می‌کنند. اگر پشت کلادفلر یا هر CDN دیگری این را درست
+ * نخوانیم، **همه‌ی کاربرها یک IP دیده می‌شوند** و هم دعوت‌های واقعی رد
+ * می‌شوند و هم پرچم مولتی‌اکانت الکی بالا می‌رود.
+ *
+ * ترتیب اعتماد:
+ *   ۱) CF-Connecting-IP  — کلادفلر همیشه این را می‌گذارد و کاربر نمی‌تواند جعلش کند
+ *   ۲) X-Forwarded-For   — اولین مقدار (nginx خودمان)
+ *   ۳) سوکت              — وقتی بدون پراکسی اجرا می‌شود
+ *
+ * امن است چون سرور بازی فقط روی 127.0.0.1 گوش می‌دهد و تنها nginx به آن
+ * وصل می‌شود؛ کسی از بیرون نمی‌تواند این هدرها را مستقیم بفرستد.
+ * اگر روزی سرور را مستقیم در معرض اینترنت گذاشتید، NARD_TRUST_PROXY=0 بگذارید.
+ */
+const TRUST_PROXY = process.env.NARD_TRUST_PROXY !== '0';
+
 function clientIp(req) {
-  const fwd = req.headers['x-forwarded-for'];
-  if (fwd) return String(fwd).split(',')[0].trim();
+  if (TRUST_PROXY) {
+    const cf = req.headers['cf-connecting-ip'];
+    if (cf) return String(cf).trim();
+    const fwd = req.headers['x-forwarded-for'];
+    if (fwd) return String(fwd).split(',')[0].trim();
+  }
   return (req.socket && req.socket.remoteAddress) || null;
 }
 
