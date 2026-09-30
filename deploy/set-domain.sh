@@ -8,8 +8,7 @@
 #
 #  بعد از اجرا:
 #     cd web && npm run build && sudo systemctl restart nard-web
-#     sudo cp deploy/nginx-nard.conf /etc/nginx/sites-available/nard
-#     sudo nginx -t && sudo systemctl reload nginx
+#     sudo bash deploy/enable-ssl.sh
 # ─────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -38,6 +37,7 @@ echo "▸ $OLD  →  $NEW"
 
 FILES=(
   deploy/nginx-nard.conf
+  deploy/nginx-bootstrap.conf
   web/lib/site.ts
   web/.env.example
   www/js/store.js
@@ -55,6 +55,4 @@ done
 echo ""
 echo "✅ تمام شد. کارهای بعدی:"
 echo "   cd web && npm run build && sudo systemctl restart nard-web"
-echo "   sudo cp deploy/nginx-nard.conf /etc/nginx/sites-available/nard"
-echo "   sudo nginx -t && sudo systemctl reload nginx"
-echo "   sudo certbot --nginx -d $NEW -d www.$NEW"
+echo "   sudo bash deploy/enable-ssl.sh"

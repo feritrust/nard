@@ -163,72 +163,74 @@ Authy اسکن کنید. بدون آن نمی‌توانید وارد پنل ش�
 
 ---
 
-## ۵) nginx
+## ۵) nginx و SSL — با یک دستور
+
+nginx و گواهی SSL یک مشکل مرغ و تخم‌مرغ دارند: nginx بدون گواهی بالا
+نمی‌آید (`no "ssl_certificate" is defined for the "listen ... ssl" directive`)
+و certbot هم بدون nginxِ بالا گواهی نمی‌گیرد. این اسکریپت هر دو را
+به ترتیب درست انجام می‌دهد:
 
 ```bash
-cp /opt/nard/deploy/cloudflare-realip.conf /etc/nginx/conf.d/
-cp /opt/nard/deploy/proxy_params          /etc/nginx/proxy_params
-cp /opt/nard/deploy/nginx-nard.conf       /etc/nginx/sites-available/nard
-ln -sf /etc/nginx/sites-available/nard    /etc/nginx/sites-enabled/nard
-rm -f /etc/nginx/sites-enabled/default
-
-nginx -t && systemctl reload nginx
+cd /opt/nard
+sudo bash deploy/enable-ssl.sh
 ```
 
-> **`cloudflare-realip.conf` را حذف نکنید.** بدون آن nginx همه‌ی بازیکن‌ها را
-> با IP سرورهای کلادفلر می‌بیند. نتیجه:
-> - محدودیت نرخ پیامک روی یک IP مشترک اعمال می‌شود؛ یک نفر کل ورود سایت را قفل می‌کند
-> - تشخیص مولتی‌اکانت همه را متقلب می‌بیند
-> - پاداش دعوت دوستان برای هیچ‌کس فعال نمی‌شود
+چه می‌کند:
+
+1. `cloudflare-realip.conf` و `proxy_params` را نصب می‌کند
+2. یک پیکربندی موقتِ **فقط HTTP** می‌گذارد و nginx را بالا می‌آورد —
+   از همین‌جا سایت روی `http://farhadtest.ir` کار می‌کند
+3. با certbot گواهی می‌گیرد
+4. پیکربندی کامل HTTPS را فعال می‌کند
+5. اگر جایی ایراد داشت، خودش به نسخه‌ی HTTP برمی‌گردد تا سایت پایین نیاید
+
+> **⚠️ قبل از اجرا، ابر DNS در کلادفلر باید خاکستری (DNS only) باشد.**
+> certbot برای اثبات مالکیت دامنه یک فایل روی سرور می‌گذارد و لتس‌انکریپت
+> باید آن را از اینترنت بخواند. با ابر نارنجی، درخواست به کلادفلر می‌رسد
+> نه سرور شما، و تأیید شکست می‌خورد.
 >
-> رنج‌های کلادفلر گاهی عوض می‌شوند؛ ماهی یک بار:
-> ```bash
-> echo '0 4 1 * * /usr/bin/env bash /opt/nard/deploy/update-cloudflare-ips.sh' | crontab -
-> ```
+> بعد از موفقیت، ابر را نارنجی کنید و SSL را روی **Full (strict)** بگذارید.
 
-در این مرحله nginx هنوز روی ۴۴۳ گواهی ندارد و `nginx -t` ممکن است ایراد بگیرد.
-اگر گرفت، موقتاً بلوک `listen 443` را کامنت کنید، بعد از مرحله‌ی ۶ برگردانید.
+### اگر certbot جواب نداد — گواهی خود کلادفلر
 
----
+مثلاً وقتی IP سرور ایران است و لتس‌انکریپت به مشکل می‌خورد. این راه اصلاً
+نیازی به خاکستری کردن ابر ندارد و گواهی‌اش ۱۵ ساله است:
 
-## ۶) گواهی SSL
-
-**چرا ابر را خاکستری کردیم:** certbot برای اثبات مالکیت دامنه باید یک فایل روی
-سرور بگذارد و لتس‌انکریپت آن را از اینترنت بخواند. وقتی ابر نارنجی است،
-درخواست به کلادفلر می‌رسد نه سرور شما، و تأیید شکست می‌خورد.
-
-```bash
-apt install -y certbot python3-certbot-nginx
-certbot --nginx -d farhadtest.ir -d www.farhadtest.ir
-```
-
-بعد از موفقیت:
-
-```bash
-systemctl reload nginx
-certbot renew --dry-run     # تمدید خودکار را تست می‌کند
-```
-
-**حالا در کلادفلر ابر را نارنجی کنید** (Proxied) و مطمئن شوید SSL روی
-**Full (strict)** است.
-
-### راه جایگزین — Origin Certificate کلادفلر
-
-اگر certbot اذیت کرد (مثلاً IP سرور ایران است و لتس‌انکریپت به مشکل خورد)،
-می‌توانید ابر را نارنجی نگه دارید و از گواهی خود کلادفلر استفاده کنید:
-
-`SSL/TLS → Origin Server → Create Certificate` → گواهی و کلید را بگیرید:
+`SSL/TLS → Origin Server → Create Certificate` → دو فایل را بگیرید:
 
 ```bash
 mkdir -p /etc/ssl/cloudflare
 nano /etc/ssl/cloudflare/farhadtest.ir.pem   # محتوای Origin Certificate
 nano /etc/ssl/cloudflare/farhadtest.ir.key   # محتوای Private Key
 chmod 600 /etc/ssl/cloudflare/*
+
+sudo bash deploy/enable-ssl.sh --cloudflare
 ```
 
-و در `/etc/nginx/sites-available/nard` دو خط `ssl_certificate` را از حالت
-کامنت درآورید. این گواهی ۱۵ ساله است و فقط برای کلادفلر معتبر است — یعنی
-اگر کسی مستقیم به IP سرور وصل شود هشدار می‌گیرد، که اشکالی ندارد.
+این گواهی فقط برای کلادفلر معتبر است — اگر کسی مستقیم به IP سرور وصل شود
+هشدار می‌گیرد، که اشکالی ندارد (اصلاً نباید مستقیم وصل شود).
+
+### چرا `cloudflare-realip.conf` مهم است
+
+بدون آن nginx همه‌ی بازیکن‌ها را با IP سرورهای کلادفلر می‌بیند:
+
+- محدودیت نرخ پیامک روی یک IP مشترک اعمال می‌شود؛ یک نفر ورود کل سایت را قفل می‌کند
+- تشخیص مولتی‌اکانت همه را متقلب می‌بیند
+- پاداش دعوت دوستان برای هیچ‌کس فعال نمی‌شود
+
+رنج‌های کلادفلر گاهی عوض می‌شوند؛ ماهی یک بار به‌روزرسانی کنید (مرحله‌ی ۸).
+
+---
+
+## ۶) تمدید خودکار گواهی
+
+```bash
+certbot renew --dry-run
+```
+
+certbot خودش یک تایمر systemd نصب می‌کند. اگر ابر نارنجی باشد، تمدید
+خودکار هم به همان مشکل مرحله‌ی ۵ می‌خورد — یا موقع تمدید ابر را خاکستری
+کنید، یا از همان اول Origin Certificate کلادفلر را بگذارید که تمدید ندارد.
 
 ---
 
@@ -311,6 +313,8 @@ systemctl restart nard-server nard-web
 | همه‌ی کاربرها «مولتی‌اکانت» علامت می‌خورند | `cloudflare-realip.conf` نصب نشده | مرحله‌ی ۵ |
 | با هر شماره‌ای می‌شود وارد شد | `NARD_DEV_CODE` صفر نیست | `.env` را درست کنید و `systemctl restart nard-server` |
 | build سایت kill می‌شود | RAM کم | swap بسازید (مرحله‌ی ۳) |
+| `no "ssl_certificate" is defined` | پیکربندی SSL قبل از گرفتن گواهی نصب شده | `sudo bash deploy/enable-ssl.sh` |
+| `cannot stat cloudflare-realip.conf` | کد سرور قدیمی است | `cd /opt/nard && git pull` |
 
 ---
 
