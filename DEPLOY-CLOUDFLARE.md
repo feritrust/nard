@@ -246,7 +246,7 @@ journalctl -u nard-server -n 50 --no-pager
 | نشانی | باید ببینید |
 |---|---|
 | `https://farhadtest.ir` | صفحه‌ی لندینگ |
-| `https://farhadtest.ir/play` | خود بازی |
+| `https://farhadtest.ir/play` | خود بازی (به `/play/` ریدایرکت می‌شود) |
 | `https://farhadtest.ir/admin` | ورود پنل مدیریت |
 | `https://farhadtest.ir/adminapi/me` | `{"ok":false,...}` — یعنی API ادمین جواب می‌دهد |
 | `https://farhadtest.ir/health` | `{"ok":true,...}` |
@@ -317,6 +317,8 @@ systemctl restart nard-server nard-web
 | `no "ssl_certificate" is defined` | پیکربندی SSL قبل از گرفتن گواهی نصب شده | `sudo bash deploy/enable-ssl.sh` |
 | پنل ادمین لاگین نمی‌شود / خطای JSON | nginx مسیر API ادمین را به Next.js می‌دهد | نسخه‌ی به‌روز را pull کنید (API حالا `/adminapi/` است) |
 | `/health` خطای ۴۰۴ می‌دهد | مسیر در nginx تعریف نشده | نسخه‌ی به‌روز را pull کنید |
+| `/play` بدون استایل و به‌هم‌ریخته | نشانی اسلش پایانی ندارد، css از `/css/` خواسته می‌شود | نسخه‌ی به‌روز را pull کنید (`/play` حالا به `/play/` ریدایرکت می‌شود) |
+| بازی همیشه با ربات است و ورود ندارد | `serverUrl` خالی است | نسخه‌ی به‌روز — حالا از نشانی صفحه ساخته می‌شود |
 | `cannot stat cloudflare-realip.conf` | کد سرور قدیمی است | `cd /opt/nard && git pull` |
 
 ---

@@ -15,9 +15,26 @@
 
   /* ------------------------------------------------------------ تنظیمات */
 
+  /**
+   * نشانی پیش‌فرض سرور را از همان جایی که صفحه باز شده می‌سازد.
+   *
+   * بدون این، بازی روی وب با serverUrl خالی بالا می‌آمد و همیشه آفلاین
+   * با ربات بازی می‌شد — بدون ورود، بدون کیف پول واقعی.
+   *
+   * در اپ اندروید (file://) خالی برمی‌گردد و MainActivity مقدار را می‌گذارد.
+   */
+  function defaultServerUrl() {
+    try {
+      if (typeof location !== 'undefined' && /^https?:$/.test(location.protocol)) {
+        return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws';
+      }
+    } catch (e) {}
+    return '';
+  }
+
   var NetConfig = {
     // نشانی سرور بازی. برای تست محلی: 'ws://10.0.2.2:8080' (شبیه‌ساز اندروید)
-    serverUrl: (root.NARD_SERVER_URL || ''),
+    serverUrl: (root.NARD_SERVER_URL || defaultServerUrl()),
     connectTimeout: 4000,      // مهلت اتصال به سرور
     searchTimeout: 9000,       // مهلت پیدا کردن حریف واقعی، بعد از آن ربات می‌آید
     botFallback: true,
