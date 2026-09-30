@@ -21,8 +21,10 @@ function adminUserRow(u) {
   return {
     id: u.id,
     name: u.name,
-    phone: u.phone,
+    username: u.username,
     telegramId: u.telegram_id,
+    balance: u.balance || 0,          // میکرو-تتر
+    balanceUsdt: D.fmtUsdt(u.balance || 0),
     avatar: u.avatar,
     coins: u.coins,
     energy: u.energy,
@@ -234,6 +236,86 @@ async function handle(req, res, url) {
     }
 
     /* ---------------------------------------------- درخواست‌ها */
+
+    /* ================================================================
+     *  واریز، برداشت و وچر
+     * ============================================================= */
+
+    case '/admin/deposits': {
+      const r = D.listDeposits({
+        status: q.get('status') && q.get('status') !== 'all' ? q.get('status') : null,
+        userId: q.get('userId') || null,
+        limit: Math.min(200, num('limit', 50)),
+        offset: num('offset', 0)
+      });
+      json(res, { ok: true, rows: r.rows, total: r.total });
+      return true;
+    }
+
+    case '/admin/deposit/resolve': {
+      if (req.method !== 'POST') break;
+      const r = D.resolveDeposit(String(body.id || ''), String(body.action || ''), {
+        credited: body.credited != null ? Number(body.credited) : null,
+        adminUser: admin.username,
+        note: String(body.note || '').slice(0, 300)
+      });
+      if (r.ok) D.adminLog(admin, 'deposit:' + body.action, String(body.id), body.note || '', ip);
+      json(res, r);
+      return true;
+    }
+
+    case '/admin/withdrawals': {
+      const r = D.listWithdrawals({
+        status: q.get('status') && q.get('status') !== 'all' ? q.get('status') : null,
+        userId: q.get('userId') || null,
+        limit: Math.min(200, num('limit', 50)),
+        offset: num('offset', 0)
+      });
+      json(res, { ok: true, rows: r.rows, total: r.total });
+      return true;
+    }
+
+    case '/admin/withdraw/resolve': {
+      if (req.method !== 'POST') break;
+      const r = D.resolveWithdraw(String(body.id || ''), String(body.action || ''), {
+        txid: body.txid ? String(body.txid) : null,
+        adminUser: admin.username,
+        note: String(body.note || '').slice(0, 300)
+      });
+      if (r.ok) D.adminLog(admin, 'withdraw:' + body.action, String(body.id), body.txid || body.note || '', ip);
+      json(res, r);
+      return true;
+    }
+
+    case '/admin/vouchers': {
+      const used = q.get('used');
+      const r = D.listVouchers({
+        used: used === 'yes' ? true : used === 'no' ? false : null,
+        limit: Math.min(500, num('limit', 100)),
+        offset: num('offset', 0)
+      });
+      json(res, { ok: true, rows: r.rows, total: r.total });
+      return true;
+    }
+
+    case '/admin/voucher/create': {
+      if (req.method !== 'POST') break;
+      /* وچر یعنی ساختن پول از هیچ — فقط مالک. */
+      if (admin.role !== 'owner') {
+        json(res, { ok: false, message: 'فقط مالک می‌تواند وچر بسازد' }, 403);
+        return true;
+      }
+      const r = D.createVouchers(Number(body.amount) || 0, Number(body.count) || 1, {
+        adminUser: admin.username,
+        note: String(body.note || '').slice(0, 200)
+      });
+      if (r.ok) {
+        D.adminLog(admin, 'voucher:create',
+          String(r.codes.length) + '×' + D.fmtUsdt(r.amount), body.note || '', ip);
+      }
+      json(res, r);
+      return true;
+    }
 
     case '/admin/claims': {
       const r = D.listClaims({

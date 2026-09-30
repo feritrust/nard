@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { adminApi, fa, type Stats, type ChartPoint } from '@/lib/adminApi';
+import { adminApi, fa, faUsdt, type Stats, type ChartPoint } from '@/lib/adminApi';
 import { Card, Stat, BarChart, Spinner, ErrorBox, Badge } from '@/components/ui';
 
 export default function Dashboard() {
@@ -24,7 +24,6 @@ export default function Dashboard() {
   if (!data) return <Spinner />;
 
   const { stats: s, chart } = data;
-  const toman = (n: number) => fa(n) + ' تومان';
 
   return (
     <div className="space-y-7">
@@ -48,9 +47,29 @@ export default function Dashboard() {
                 href="/admin/claims"
                 className="rounded-xl border border-ink-500 bg-ink-900 px-4 py-3 text-sm transition hover:border-gold-400/50"
               >
-                <div className="fa-nums font-black text-gold-400">{fa(s.pending.claims)} درخواست</div>
+                <div className="fa-nums font-black text-gold-400">{fa(s.pending.claims)} درخواست جایزه</div>
+                <div className="fa-nums mt-1 text-[11px] text-ink-300">نیاز به رسیدگی</div>
+              </Link>
+            )}
+            {s.pending.deposits > 0 && (
+              <Link
+                href="/admin/deposits"
+                className="rounded-xl border border-mint-400/40 bg-mint-400/10 px-4 py-3 text-sm transition hover:bg-mint-400/20"
+              >
+                <div className="fa-nums font-black text-mint-400">{fa(s.pending.deposits)} واریز</div>
                 <div className="fa-nums mt-1 text-[11px] text-ink-300">
-                  {fa(s.pending.sell)} فروش سکه ({toman(s.pending.sellToman)}) • {fa(s.pending.prize)} جایزه
+                  {faUsdt(s.pending.depositsAmount)} تتر در انتظار تأیید
+                </div>
+              </Link>
+            )}
+            {s.pending.withdrawals > 0 && (
+              <Link
+                href="/admin/withdrawals"
+                className="rounded-xl border border-sky-400/40 bg-sky-400/10 px-4 py-3 text-sm transition hover:bg-sky-400/20"
+              >
+                <div className="fa-nums font-black text-sky-400">{fa(s.pending.withdrawals)} برداشت</div>
+                <div className="fa-nums mt-1 text-[11px] text-ink-300">
+                  {faUsdt(s.pending.withdrawalsAmount)} تتر در انتظار پرداخت
                 </div>
               </Link>
             )}
@@ -84,8 +103,25 @@ export default function Dashboard() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Stat icon="🪙" label="فی امروز" value={fa(s.economy.rakeToday)} sub={`${fa(s.economy.rakeWeek)} در هفته`} tone="gold" />
           <Stat icon="💰" label="فی کل" value={fa(s.economy.rakeTotal)} tone="gold" />
-          <Stat icon="💳" label="فروش امروز" value={toman(s.economy.purchasedToday)} sub={`کل: ${toman(s.economy.purchasedTotal)}`} tone="mint" />
           <Stat icon="🌐" label="سکه در گردش" value={fa(s.economy.coinsInCirculation)} sub={`${fa(s.economy.energyInCirculation)} انرژی`} tone="violet" />
+          <Stat icon="🔄" label="خرید/فروش امروز" value={fa(s.economy.coinsBoughtToday)} sub={`${fa(s.economy.coinsSoldToday)} سکه فروخته شد`} tone="sky" />
+        </div>
+      </section>
+
+      {/* -------------------------------------------------------- تتر */}
+      <section>
+        <h2 className="mb-3 text-sm font-extrabold text-ink-300">تتر</h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Stat icon="💵" label="واریز امروز" value={faUsdt(s.economy.depositedToday)} sub={`کل: ${faUsdt(s.economy.depositedTotal)}`} tone="mint" />
+          <Stat icon="🎟️" label="وچرهای استفاده‌شده" value={faUsdt(s.economy.vouchersTotal)} tone="gold" />
+          <Stat icon="📤" label="برداشت‌شده" value={faUsdt(s.economy.withdrawnTotal)} tone="sky" />
+          <Stat
+            icon="🏦"
+            label="بالانس نزد کاربران"
+            value={faUsdt(s.economy.balanceHeld)}
+            sub="بدهی شما به کاربران"
+            tone="violet"
+          />
         </div>
       </section>
 

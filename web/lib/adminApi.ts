@@ -102,7 +102,24 @@ export const adminApi = {
   settings: () => call<{ settings: Record<string, any>; defaults: Record<string, any> }>('/admin/settings'),
   saveSettings: (settings: Record<string, any>) =>
     call<{ settings: Record<string, any>; changed: string[] }>('/admin/settings/save', { method: 'POST', body: { settings } }),
-  log: (limit = 100) => call<{ rows: AdminLog[] }>(`/admin/log?limit=${limit}`)
+  log: (limit = 100) => call<{ rows: AdminLog[] }>(`/admin/log?limit=${limit}`),
+
+  /* ---------------------------------------------- واریز و برداشت */
+
+  deposits: (status = 'pending') =>
+    call<{ rows: Deposit[]; total: number }>(`/admin/deposits?status=${status}&limit=200`),
+  resolveDeposit: (id: string, action: 'approve' | 'reject', opts?: { credited?: number; note?: string }) =>
+    call('/admin/deposit/resolve', { method: 'POST', body: { id, action, ...opts } }),
+
+  withdrawals: (status = 'pending') =>
+    call<{ rows: Withdrawal[]; total: number }>(`/admin/withdrawals?status=${status}&limit=200`),
+  resolveWithdraw: (id: string, action: 'paid' | 'reject', opts?: { txid?: string; note?: string }) =>
+    call('/admin/withdraw/resolve', { method: 'POST', body: { id, action, ...opts } }),
+
+  vouchers: (used?: 'yes' | 'no') =>
+    call<{ rows: Voucher[]; total: number }>(`/admin/vouchers${used ? `?used=${used}` : ''}&limit=300`),
+  createVouchers: (amount: number, count: number, note?: string) =>
+    call<{ codes: string[]; amount: number }>('/admin/voucher/create', { method: 'POST', body: { amount, count, note } })
 };
 
 /* ------------------------------------------------------------ انواع */
@@ -113,15 +130,23 @@ export type Stats = {
   economy: {
     coinsInCirculation: number; energyInCirculation: number;
     rakeToday: number; rakeTotal: number; rakeWeek: number;
-    purchasedToday: number; purchasedTotal: number;
+    // این‌ها به میکرو-تتر هستند
+    balanceHeld: number; depositedTotal: number; depositedToday: number;
+    withdrawnTotal: number; vouchersTotal: number;
+    coinsBoughtToday: number; coinsSoldToday: number;
   };
-  pending: { claims: number; sell: number; prize: number; sellToman: number; fraud: number };
+  pending: {
+    claims: number; prize: number; fraud: number;
+    deposits: number; depositsAmount: number;
+    withdrawals: number; withdrawalsAmount: number;
+  };
 };
 
 export type ChartPoint = { date: string; users: number; games: number; rake: number; revenue: number };
 
 export type AdminUser = {
-  id: string; name: string; phone: string | null; telegramId: string | null; avatar: string;
+  id: string; name: string; username: string | null; telegramId: string | null; avatar: string;
+  balance: number; balanceUsdt: string;
   coins: number; energy: number; level: number; xp: number;
   games: number; wins: number; losses: number;
   isGuest: boolean; banned: boolean; banReason: string | null;
@@ -146,7 +171,30 @@ export type Claim = {
   amount: number; toman: number; energy: number; dest: string | null;
   prize_name: string | null; contact: string | null;
   created_at: number; handled_at: number | null; handled_by: string | null; admin_note: string | null;
-  user_name: string; user_phone: string | null; user_coins: number; user_banned: number;
+  user_name: string; user_username: string | null; user_coins: number; user_banned: number;
+};
+
+/** همه‌ی مبالغ تتری به «میکرو-تتر» (۱ تتر = ۱٬۰۰۰٬۰۰۰) هستند */
+export type Deposit = {
+  id: string; user_id: string; network: string;
+  amount: number; credited: number; txid: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: number; handled_at: number | null; handled_by: string | null; admin_note: string | null;
+  username: string | null; name: string | null;
+};
+
+export type Withdrawal = {
+  id: string; user_id: string; network: string;
+  amount: number; fee: number; payout: number; address: string;
+  status: 'pending' | 'paid' | 'rejected'; txid: string | null;
+  created_at: number; handled_at: number | null; handled_by: string | null; admin_note: string | null;
+  username: string | null; name: string | null;
+};
+
+export type Voucher = {
+  code: string; amount: number; note: string | null;
+  created_by: string | null; created_at: number;
+  used_by: string | null; used_at: number | null; username: string | null;
 };
 
 export type FraudFlag = {
@@ -172,6 +220,24 @@ export type UserDetail = {
 /* ---------------------------------------------------------- کمکی‌ها */
 
 export const fa = (n: number | null | undefined) => Number(n || 0).toLocaleString('fa-IR');
+
+/** واحد بالانس: میکرو-تتر (۱ تتر = ۱٬۰۰۰٬۰۰۰) */
+export const USDT = 1_000_000;
+
+/* ⚠️ toLocaleString صفرهای اعشار را می‌اندازد («۵» به‌جای «۵٫۰۰»).
+ * برای پول همیشه دو رقم اعشار نشان می‌دهیم. */
+const faDigits = (s: string) => s.replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]);
+
+export const usdt = (micro: number | null | undefined) =>
+  (Math.round(Number(micro) || 0) / USDT).toFixed(2);
+
+export const faUsdt = (micro: number | null | undefined) => {
+  const [w, d] = usdt(micro).split('.');
+  return faDigits(w.replace(/\B(?=(\d{3})+(?!\d))/g, '٬')) + '٫' + faDigits(d);
+};
+
+export const toMicro = (v: string | number) =>
+  Math.round((parseFloat(String(v).replace(/[^\d.]/g, '')) || 0) * USDT);
 
 export const faDate = (ts: number | null | undefined) => {
   if (!ts) return '—';

@@ -102,7 +102,7 @@ export default function UsersPage() {
                               {u.name || 'بی‌نام'}
                             </span>
                             <span className="fa-nums block text-[11px] text-ink-300" dir="ltr">
-                              {u.phone || (u.telegramId ? 'TG ' + u.telegramId : 'مهمان')}
+                              {u.username || (u.telegramId ? 'TG ' + u.telegramId : 'مهمان')}
                             </span>
                           </span>
                         </Link>

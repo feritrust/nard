@@ -1091,3 +1091,114 @@ label.fld > span { display: block; font-size: 12.5px; color: var(--muted); margi
   background: var(--purple); color: #1a1030; font-size: 9.5px; font-weight: 900;
   padding: 3px 9px; border-bottom-left-radius: 9px;
 }
+
+/* =========================================================================
+ *  کیف پول تتری، حساب کاربری و کد بازیابی
+ * ===================================================================== */
+
+/* ── کارت موجودی ───────────────────────────────────────────── */
+.balance-card {
+  margin: 10px 14px 12px;
+  padding: 16px 14px 14px;
+  border-radius: var(--radius);
+  background: linear-gradient(145deg, #12324a, #16203a 60%);
+  border: 1px solid #2a4a66;
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.balance-card .bal-label { font-size: 11.5px; color: var(--muted); letter-spacing: .3px; }
+.balance-card .bal-amount {
+  font-size: 30px; font-weight: 900; color: #6ee7b7;
+  direction: ltr; margin-top: 2px; line-height: 1.15;
+  text-shadow: 0 2px 14px rgba(110, 231, 183, .25);
+}
+.balance-card .bal-amount span { font-size: 14px; color: var(--muted); font-weight: 700; }
+
+/* ── تب‌ها ─────────────────────────────────────────────────── */
+.tabs {
+  display: flex; gap: 6px; padding: 0 14px 10px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tabs .tab {
+  flex: 1 0 auto; min-width: 78px;
+  padding: 9px 12px; border-radius: 999px;
+  background: var(--panel); border: 1px solid var(--line);
+  color: var(--muted); font-family: inherit; font-size: 12.5px; font-weight: 800;
+  cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+}
+.tabs .tab.active {
+  background: var(--gold); border-color: var(--gold-2);
+  color: #2a1e05;
+}
+
+/* ── کد بازیابی ────────────────────────────────────────────── */
+.recovery-box {
+  direction: ltr; text-align: center;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 15px; font-weight: 700; letter-spacing: 1.5px; line-height: 2;
+  word-break: break-all;
+  padding: 16px 12px; margin-bottom: 12px;
+  border-radius: var(--radius);
+  background: #0d1a2c; border: 1px dashed var(--gold);
+  color: var(--gold);
+  user-select: all; -webkit-user-select: all;
+}
+
+/* ── چک‌باکس ───────────────────────────────────────────────── */
+.chk {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 13px; color: var(--text); cursor: pointer;
+}
+.chk input { width: 18px; height: 18px; accent-color: var(--gold); flex: 0 0 auto; }
+
+/* ── راهنمای زیر فیلدها ────────────────────────────────────── */
+.fld .hint { display: block; margin-top: 5px; font-size: 11.5px; color: var(--muted); min-height: 14px; }
+.fld .hint.ok  { color: var(--green); }
+.fld .hint.bad { color: var(--red); }
+
+/* ── ردیف تراکنش / درخواست ─────────────────────────────────── */
+.tx-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; margin-bottom: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--panel); border: 1px solid var(--line);
+}
+.tx-row .tx-main { flex: 1; min-width: 0; }
+.tx-row .tx-title { font-size: 13px; font-weight: 800; }
+.tx-row .tx-sub {
+  font-size: 11px; color: var(--muted); margin-top: 2px;
+  direction: ltr; text-align: start;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tx-row .tx-amt { font-size: 13px; font-weight: 900; direction: ltr; flex: 0 0 auto; }
+
+.pill {
+  font-size: 10.5px; font-weight: 800; padding: 3px 9px;
+  border-radius: 999px; flex: 0 0 auto;
+}
+.pill.pending  { background: rgba(245,196,81,.16);  color: var(--gold); }
+.pill.approved,
+.pill.paid     { background: rgba(34,201,138,.16);  color: var(--green); }
+.pill.rejected { background: rgba(242,85,90,.16);   color: var(--red); }
+
+/* ── آدرس واریز ────────────────────────────────────────────── */
+.addr-box {
+  direction: ltr; word-break: break-all;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px; line-height: 1.7;
+  padding: 11px 12px; margin: 8px 0 10px;
+  border-radius: var(--radius-sm);
+  background: #0d1a2c; border: 1px solid var(--line);
+  color: var(--text);
+  user-select: all; -webkit-user-select: all;
+}
+
+/* ── کادر هشدار ────────────────────────────────────────────── */
+.warn-box {
+  padding: 10px 12px; margin-bottom: 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(245,196,81,.08);
+  border: 1px solid rgba(245,196,81,.3);
+  font-size: 12px; line-height: 1.75; color: #f0d79a;
+}

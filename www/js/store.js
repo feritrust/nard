@@ -21,8 +21,11 @@
     REFERRAL_ENERGY: 150,        // انرژی جایزه به ازای هر دعوت موفق
     REFERRAL_COINS: 200,         // سکه‌ی جایزه برای دعوت‌کننده
     REFERRAL_BONUS_NEW: 300,     // سکه‌ی جایزه برای کاربر دعوت‌شده
-    SELL_RATE: 1200,             // هر ۱۲۰۰ سکه = ۱۰۰۰ تومان
-    SELL_MIN: 50000              // حداقل سکه برای فروش
+    // نرخ‌های واقعی از سرور می‌آیند؛ این‌ها فقط پیش‌فرض‌اند.
+    BUY_RATE: 100,               // میکرو-تتر برای هر سکه هنگام خرید
+    SELL_RATE: 80,               // میکرو-تتر برای هر سکه هنگام فروش
+    BUY_MIN: 1000,
+    SELL_MIN: 10000
   };
 
   /* اتاق‌های بازی — «فی» فقط از اتاق ۱۰۰۰ سکه به بالا */
@@ -352,30 +355,14 @@
 
   function packTotal(pack) { return Math.round(pack.coins * (1 + pack.bonus / 100)); }
 
-  /** خرید بسته — در نسخه‌ی واقعی، پس از تأیید درگاه صدا زده می‌شود */
-  function completePurchase(pack, refId) {
-    var total = packTotal(pack);
-    profile.coins += total;
-    addTx('purchase', total, 0, 'خرید بسته ' + total.toLocaleString('fa-IR') + ' سکه' + (refId ? ' — کد پیگیری ' + refId : ''));
-    save();
-    return { ok: true, coins: total };
+  /* خرید و فروش سکه فقط روی سرور انجام می‌شود — پول واقعی در میان است
+   * و کلاینت هیچ‌وقت نباید بتواند بالانس بسازد. این توابع فقط پیام
+   * روشن می‌دهند تا رابط کاربری در حالت آفلاین گیج نشود. */
+  function sellCoins() {
+    return { ok: false, reason: 'برای فروش سکه باید به سرور وصل باشید' };
   }
-
-  /** فروش سکه (درخواست تسویه) */
-  function sellCoins(amount, dest) {
-    amount = Math.round(amount);
-    if (amount < CONFIG.SELL_MIN) return { ok: false, reason: 'حداقل فروش ' + CONFIG.SELL_MIN.toLocaleString('fa-IR') + ' سکه است' };
-    if (amount > profile.coins) return { ok: false, reason: 'سکه کافی ندارید' };
-    var toman = Math.floor(amount / CONFIG.SELL_RATE) * 1000;
-    profile.coins -= amount;
-    profile.claims.unshift({
-      id: 'S' + Date.now().toString(36).toUpperCase(),
-      kind: 'sell', amount: amount, toman: toman, dest: dest || '',
-      status: 'pending', t: Date.now()
-    });
-    addTx('sell', -amount, 0, 'فروش سکه — ' + toman.toLocaleString('fa-IR') + ' تومان');
-    save();
-    return { ok: true, toman: toman };
+  function buyCoins() {
+    return { ok: false, reason: 'برای خرید سکه باید به سرور وصل باشید' };
   }
 
   /* ----------------------------------------------------------- جوایز */
@@ -473,10 +460,13 @@
     profile.id = p.id || profile.id;
     profile.name = p.name || profile.name;
     profile.avatar = p.avatar || profile.avatar;
-    profile.phone = p.phone || null;
+    profile.username = p.username || null;
+    profile.telegramLinked = !!p.telegramLinked;
+    profile.hasRecovery = !!p.hasRecovery;
     profile.verified = !p.isGuest;
     profile.coins = p.coins || 0;
     profile.energy = p.energy || 0;
+    profile.balance = p.balance || 0;      // میکرو-تتر
     profile.xp = p.xp || 0;
     profile.skin = p.skin || 'classic';
     profile.skins = p.skins || ['classic'];
@@ -529,7 +519,7 @@
     roomById: roomById, roomHasRake: roomHasRake, roomEconomy: roomEconomy,
     energyForEntry: energyForEntry, canAfford: canAfford,
     enterRoom: enterRoom, refundRoom: refundRoom, settleGame: settleGame,
-    packTotal: packTotal, completePurchase: completePurchase, sellCoins: sellCoins,
+    packTotal: packTotal, sellCoins: sellCoins, buyCoins: buyCoins,
     prizeById: prizeById, redeemPrize: redeemPrize,
     inviteLink: inviteLink, inviteText: inviteText,
     applyReferral: applyReferral, creditReferral: creditReferral,

@@ -97,7 +97,8 @@ export default function UserPage({ params }: { params: Promise<{ id: string }> }
             </div>
             <dl className="fa-nums mt-3 grid gap-x-6 gap-y-1 text-[12.5px] sm:grid-cols-2 lg:grid-cols-3">
               <div className="flex gap-2"><dt className="text-ink-300">شناسه:</dt><dd className="truncate font-mono text-[11px]" dir="ltr">{u.id}</dd></div>
-              {u.phone && <div className="flex gap-2"><dt className="text-ink-300">شماره:</dt><dd dir="ltr">{u.phone}</dd></div>}
+              {u.username && <div className="flex gap-2"><dt className="text-ink-300">نام کاربری:</dt><dd dir="ltr">{u.username}</dd></div>}
+              <div className="flex gap-2"><dt className="text-ink-300">بالانس:</dt><dd className="font-bold text-mint-400" dir="ltr">{u.balanceUsdt} USDT</dd></div>
               {u.telegramId && <div className="flex gap-2"><dt className="text-ink-300">تلگرام:</dt><dd dir="ltr">{u.telegramId}</dd></div>}
               <div className="flex gap-2"><dt className="text-ink-300">کد معرف:</dt><dd dir="ltr">{u.referralCode}</dd></div>
               {u.referredBy && <div className="flex gap-2"><dt className="text-ink-300">معرف او:</dt><dd dir="ltr">{u.referredBy}</dd></div>}

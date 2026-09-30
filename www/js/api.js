@@ -75,16 +75,36 @@
 
   /* ------------------------------------------------------------ ورود */
 
-  API.requestCode = function (phone) { return req('/auth/request', { method: 'POST', body: { phone: phone } }); };
+  function keepToken(d) {
+    if (d && d.ok && d.token) { saveToken(d.token); API.online = true; }
+    return d;
+  }
 
-  API.verifyCode = function (phone, code) {
-    return req('/auth/verify', {
+  /** ثبت‌نام. اگر الان مهمان باشیم، همان حساب ارتقا می‌یابد. */
+  API.register = function (username, password, extra) {
+    var body = {
+      username: username, password: password,
+      token: API.token, source: API.source || 'web'
+    };
+    if (extra) { body.name = extra.name; body.avatar = extra.avatar; }
+    return req('/auth/register', { method: 'POST', body: body }).then(keepToken);
+  };
+
+  API.login = function (username, password) {
+    return req('/auth/login', {
       method: 'POST',
-      body: { phone: phone, code: code, token: API.token, source: API.source || 'web' }
-    }).then(function (d) {
-      if (d.ok && d.token) { saveToken(d.token); API.online = true; }
-      return d;
-    });
+      body: { username: username, password: password, source: API.source || 'web' }
+    }).then(keepToken);
+  };
+
+  API.recover = function (username, code, password) {
+    return req('/auth/recover', {
+      method: 'POST', body: { username: username, code: code, password: password }
+    }).then(keepToken);
+  };
+
+  API.checkUsername = function (u) {
+    return req('/auth/check-username?u=' + encodeURIComponent(u));
   };
 
   /** ورود از داخل مینی‌اپ تلگرام */
@@ -120,15 +140,47 @@
   API.transactions = function () { return req('/api/transactions?limit=40'); };
   API.claims = function () { return req('/api/claims'); };
 
-  API.buyPack = function (packId) {
-    return req('/api/purchase/start', { method: 'POST', body: { packId: packId } });
+  /* ------------------------------------------------- کیف پول تتری */
+
+  API.wallet = function () { return req('/api/wallet'); };
+
+  /** خرید سکه — یا بسته‌ی آماده، یا مقدار دلخواه */
+  API.buyCoins = function (coinsOrPack) {
+    var body = typeof coinsOrPack === 'string' ? { packId: coinsOrPack } : { coins: coinsOrPack };
+    return req('/api/coins/buy', { method: 'POST', body: body });
   };
-  API.completePurchase = function (purchaseId) {
-    return req('/api/purchase/complete', { method: 'POST', body: { purchaseId: purchaseId } });
+  API.sellCoins = function (coins) {
+    return req('/api/coins/sell', { method: 'POST', body: { coins: coins } });
   };
-  API.sell = function (amount, dest) {
-    return req('/api/sell', { method: 'POST', body: { amount: amount, dest: dest } });
+  API.deposit = function (amountMicro, txid, network) {
+    return req('/api/deposit', {
+      method: 'POST', body: { amount: amountMicro, txid: txid, network: network || 'TRC20' }
+    });
   };
+  API.voucher = function (code) {
+    return req('/api/voucher', { method: 'POST', body: { code: code } });
+  };
+  API.withdraw = function (amountMicro, address, network) {
+    return req('/api/withdraw', {
+      method: 'POST', body: { amount: amountMicro, address: address, network: network || 'TRC20' }
+    });
+  };
+
+  /* ------------------------------------------------------- حساب */
+
+  API.changePassword = function (oldPass, newPass) {
+    return req('/api/account/password', {
+      method: 'POST', body: { oldPassword: oldPass, newPassword: newPass }
+    });
+  };
+  API.newRecovery = function (password) {
+    return req('/api/account/recovery', { method: 'POST', body: { password: password } });
+  };
+  API.linkCode = function () { return req('/api/account/link-code', { method: 'POST' }); };
+  API.linkWith = function (code) {
+    return req('/api/account/link', { method: 'POST', body: { code: code } });
+  };
+  API.unlinkTelegram = function () { return req('/api/account/unlink-telegram', { method: 'POST' }); };
   API.prize = function (prizeId, contact) {
     return req('/api/prize', { method: 'POST', body: { prizeId: prizeId, contact: contact } });
   };

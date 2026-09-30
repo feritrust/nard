@@ -165,10 +165,13 @@
 
   /* --------------------------------------------------- انتخاب بهترین نوبت */
 
+  /* thinkMs بازه‌ی پایه‌ی «فکر کردن» است. مقدار واقعی در thinkTime()
+   * بر اساس تعداد گزینه‌های پیش رو حساب می‌شود — چون چیزی که ربات را
+   * لو می‌دهد سرعتش نیست، یکنواختی‌اش است. */
   var LEVELS = {
-    easy:   { noise: 26, topK: 6, thinkMs: [700, 1400] },
-    normal: { noise: 8,  topK: 3, thinkMs: [600, 1200] },
-    hard:   { noise: 0,  topK: 1, thinkMs: [500, 1100] }
+    easy:   { noise: 26, topK: 6, thinkMs: [1400, 3200] },
+    normal: { noise: 8,  topK: 3, thinkMs: [1600, 3600] },
+    hard:   { noise: 0,  topK: 1, thinkMs: [1800, 4200] }
   };
 
   /**
@@ -189,7 +192,10 @@
 
     var k = Math.min(cfg.topK, scored.length);
     var pick = scored[Math.floor(Math.random() * k)];
-    return pick.opt;
+
+    /* تعداد گزینه‌ها را همراه انتخاب برمی‌گردانیم تا صداکننده بتواند
+     * زمان فکر کردن را متناسب با سختی تصمیم تنظیم کند. */
+    return { seq: pick.opt.seq, state: pick.opt.state, options: options.length };
   }
 
   /** آیا ربات دوبل بدهد؟ (تصمیم ساده بر پایه‌ی برتری pip) */
@@ -214,11 +220,53 @@
     return deficit < 0.18;
   }
 
-  /** زمان تصادفی «فکر کردن» تا حس بازی با آدم بدهد */
-  function thinkTime(level) {
+  /**
+   * زمان «فکر کردن» ربات.
+   *
+   * یک ربات که همیشه دقیقاً ۱ ثانیه مکث می‌کند — چه حرکت اجباری باشد
+   * چه ۱۵ گزینه داشته باشد — از روی همین یکنواختی لو می‌رود. آدم‌ها:
+   *   • حرکت اجباری را تقریباً فوری می‌زنند
+   *   • وقتی گزینه زیاد است بیشتر مکث می‌کنند
+   *   • گاهی بی‌دلیل طولانی فکر می‌کنند (حواس‌پرتی، چای، پیام)
+   *
+   * @param level    سطح ربات
+   * @param options  تعداد دنباله‌های ممکن (اختیاری)
+   */
+  function thinkTime(level, options) {
     var cfg = LEVELS[level] || LEVELS.normal;
     var a = cfg.thinkMs[0], b = cfg.thinkMs[1];
-    return a + Math.random() * (b - a);
+    var n = typeof options === 'number' ? options : 4;
+
+    // حرکت اجباری: آدم هم معطل نمی‌کند
+    if (n <= 1) return 450 + Math.random() * 550;
+
+    /* هرچه گزینه بیشتر، مکث بیشتر — ولی لگاریتمی، نه خطی؛
+     * کسی برای ۲۰ گزینه ۲۰ برابر ۱ گزینه فکر نمی‌کند. */
+    var weight = Math.min(1.35, 0.45 + Math.log(n) / 3.2);
+    var base = (a + Math.random() * (b - a)) * weight;
+
+    // گاهی یک مکث طولانی، مثل آدمی که حواسش پرت شده
+    if (Math.random() < 0.09) base += 1800 + Math.random() * 3200;
+
+    // و گاهی یک حرکت سریع و بی‌فکر
+    else if (Math.random() < 0.14) base *= 0.45;
+
+    return Math.max(400, Math.min(11000, base));
+  }
+
+  /** مکث بین جابه‌جا کردن دو مهره در یک نوبت */
+  function moveDelay() {
+    // حرکت دوم معمولاً سریع‌تر است چون تصمیم قبلاً گرفته شده
+    var d = 320 + Math.random() * 520;
+    if (Math.random() < 0.12) d += 700 + Math.random() * 1100;  // تردید
+    return d;
+  }
+
+  /** مکث قبل از انداختن تاس — کسی دکمه را فوری نمی‌زند */
+  function rollDelay() {
+    var d = 500 + Math.random() * 1100;
+    if (Math.random() < 0.08) d += 1500 + Math.random() * 2500;
+    return d;
   }
 
   return {
@@ -228,6 +276,8 @@
     shouldDouble: shouldDouble,
     shouldAcceptDouble: shouldAcceptDouble,
     thinkTime: thinkTime,
+    moveDelay: moveDelay,
+    rollDelay: rollDelay,
     LEVELS: LEVELS
   };
 });

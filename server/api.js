@@ -12,10 +12,33 @@ const C = require('./config.js');
 
 /* ------------------------------------------------------------ ابزارها */
 
+/* ⚠️ کلیدهایی که هرگز نباید از سرور بیرون بروند.
+ *
+ * چند تابع دیتابیس برای راحتی، ردیف کامل کاربر را برمی‌گردانند
+ * (مثلاً claimWelcome). اگر کسی یادش برود آن را حذف کند، هش رمز و
+ * کد بازیابی مستقیم به مرورگر می‌رسد. به‌جای اعتماد به یادآوری،
+ * همین‌جا در تنها دروازه‌ی خروجی پاکشان می‌کنیم. */
+const SECRET_KEYS = new Set([
+  'pass_hash', 'pass_salt', 'recovery_hash', 'totp_secret',
+  'passHash', 'passSalt', 'recoveryHash', 'totpSecret'
+]);
+
+function scrub(value, depth = 0) {
+  if (depth > 6 || value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((v) => scrub(v, depth + 1));
+
+  const out = {};
+  for (const [k, v] of Object.entries(value)) {
+    if (SECRET_KEYS.has(k)) continue;
+    out[k] = scrub(v, depth + 1);
+  }
+  return out;
+}
+
 function json(res, obj, status) {
   // دیتابیس دلیل خطا را در reason می‌گذارد؛ کلاینت message می‌خواند
   if (obj && obj.ok === false && obj.reason && !obj.message) obj.message = obj.reason;
-  const body = JSON.stringify(obj);
+  const body = JSON.stringify(scrub(obj));
   res.writeHead(status || 200, {
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(body),
@@ -77,11 +100,15 @@ function publicProfile(u) {
     id: u.id,
     name: u.name,
     avatar: u.avatar,
-    phone: u.phone,
+    username: u.username,
     telegramId: u.telegram_id,
+    telegramLinked: !!u.telegram_id,
+    hasRecovery: !!u.recovery_hash && !u.recovery_used,
     isGuest: !!u.is_guest,
     coins: u.coins,
     energy: u.energy,
+    balance: u.balance || 0,          // میکرو-تتر
+    balanceUsdt: D.fmtUsdt(u.balance || 0),
     xp: u.xp,
     level: lvl.level,
     levelXp: lvl.xp,
@@ -126,40 +153,37 @@ setInterval(() => {
  * ===================================================================== */
 
 const AUTH = {
-  codeLen: 5,
-  ttlMs: 2 * 60 * 1000,
-  resendMs: 60 * 1000,
-  maxTries: 5,
-  devReturnCode: process.env.NARD_DEV_CODE !== '0'
+  /* در نسخه‌ی قبلی این مقدار تعیین می‌کرد کد پیامک در پاسخ برگردد یا نه.
+   * حالا ورود با نام کاربری و رمز است و چنین دری وجود ندارد. */
+  loginMaxPerMin: 10,
+  signupMaxPerHour: 5
 };
 
-const otps = new Map();     // phone -> {code, exp, tries}
-const smsRate = new Map();  // phone -> آخرین ارسال
+/* ضد brute-force روی نام کاربری، جدا از محدودیت IP */
+const loginFails = new Map();   // username -> {n, until}
 
-function normalizePhone(raw) {
-  let s = String(raw || '')
-    .replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
-    .replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d))
-    .replace(/\D/g, '');
-  if (s.startsWith('0098')) s = '0' + s.slice(4);
-  else if (s.startsWith('98') && s.length === 12) s = '0' + s.slice(2);
-  else if (s.length === 10 && s[0] === '9') s = '0' + s;
-  return /^09\d{9}$/.test(s) ? s : null;
+function loginLocked(uname) {
+  const r = loginFails.get(uname);
+  if (!r) return 0;
+  if (r.until < Date.now()) { loginFails.delete(uname); return 0; }
+  return Math.ceil((r.until - Date.now()) / 1000);
 }
+function noteLoginFail(uname) {
+  const r = loginFails.get(uname) || { n: 0, until: 0 };
+  r.n++;
+  // بعد از ۵ تلاش ناموفق، قفل پله‌ای: ۱، ۲، ۴، ۸… دقیقه (حداکثر ۳۰)
+  if (r.n >= 5) {
+    const mins = Math.min(30, Math.pow(2, r.n - 5));
+    r.until = Date.now() + mins * 60000;
+  }
+  loginFails.set(uname, r);
+}
+function clearLoginFails(uname) { loginFails.delete(uname); }
 
-/**
- * ارسال پیامک — سرویس پیامک خودتان را اینجا وصل کنید.
- *
- * نمونه‌ی کاوه‌نگار:
- *   const url = `https://api.kavenegar.com/v1/${KEY}/verify/lookup.json` +
- *               `?receptor=${phone}&token=${code}&template=nard-login`;
- *   const r = await fetch(url);
- *   return r.ok;
- */
-async function sendSms(phone, code) {
-  console.log(`[sms] کد ورود ${phone}: ${code}`);
-  return true;
-}
+setInterval(() => {
+  const t = Date.now();
+  for (const [k, v] of loginFails) if (v.until && v.until < t - 3600000) loginFails.delete(k);
+}, 600000).unref?.();
 
 /* ========================================================================
  *  ورود از تلگرام (مینی‌اپ)
@@ -223,77 +247,104 @@ async function handle(req, res, url) {
   if (path === '/api/config') {
     return json(res, {
       ok: true,
-      rooms: C.ROOMS, packs: C.COIN_PACKS, prizes: C.PRIZES, skins: C.SKINS,
+      rooms: C.ROOMS,
+      // قیمت هر بسته از نرخ روز حساب می‌شود، نه از فایل config
+      packs: C.COIN_PACKS.map((p) => ({
+        ...p,
+        total: C.packTotal(p),
+        cost: p.coins * D.setting('BUY_RATE'),
+        costUsdt: D.fmtUsdt(p.coins * D.setting('BUY_RATE'))
+      })),
+      prizes: C.PRIZES, skins: C.SKINS,
       settings: D.allSettings(),
       maintenance: !!D.setting('MAINTENANCE')
     }), true;
   }
 
-  /* ------------------------------------------------ درخواست کد تأیید */
+  /* ========================================================================
+   *  ثبت‌نام و ورود با نام کاربری و رمز
+   * ===================================================================== */
 
-  if (path === '/auth/request' && req.method === 'POST') {
-    if (tooFast('sms:' + ip, 10)) return json(res, { ok: false, message: 'درخواست‌های زیاد — کمی صبر کنید' }, 429), true;
-    const body = await readBody(req);
-    const phone = normalizePhone(body.phone);
-    if (!phone) return json(res, { ok: false, message: 'شماره‌ی موبایل درست نیست' }), true;
-
-    const last = smsRate.get(phone) || 0;
-    if (Date.now() - last < AUTH.resendMs) {
-      const wait = Math.ceil((AUTH.resendMs - (Date.now() - last)) / 1000);
-      return json(res, { ok: false, message: `تا ${wait} ثانیه‌ی دیگر نمی‌توانید کد جدید بگیرید`, resendIn: wait }), true;
+  if (path === '/auth/register' && req.method === 'POST') {
+    if (tooFast('signup:' + ip, AUTH.signupMaxPerHour)) {
+      return json(res, { ok: false, message: 'ثبت‌نام‌های زیاد از این شبکه — کمی صبر کنید' }, 429), true;
     }
+    const body = await readBody(req);
 
-    const code = String(crypto.randomInt(10000, 100000));
-    otps.set(phone, { code, exp: Date.now() + AUTH.ttlMs, tries: 0 });
-    smsRate.set(phone, Date.now());
-    await sendSms(phone, code);
+    /* اگر با حساب مهمان وارد است، همان حساب ارتقا می‌یابد تا
+     * سکه‌ها و تاریخچه‌اش از بین نرود. */
+    const cur = D.userByToken(bearer(req) || body.token);
+    const upgrade = cur && cur.is_guest && !cur.username ? cur.id : null;
 
+    const r = D.register({
+      username: body.username,
+      password: body.password,
+      name: body.name,
+      avatar: body.avatar,
+      ip,
+      userId: upgrade
+    });
+    if (!r.ok) return json(res, r), true;
+
+    D.checkMultiAccount(ip);
+    const token = D.createSession(r.user.id, body.source || 'web', ip);
     return json(res, {
-      ok: true, ttl: AUTH.ttlMs, resendIn: AUTH.resendMs / 1000,
-      devCode: AUTH.devReturnCode ? code : undefined
+      ok: true, token, isNew: !upgrade,
+      // ⚠️ کد بازیابی فقط همین یک بار برمی‌گردد
+      recovery: r.recovery,
+      profile: publicProfile(D.getUser(r.user.id))
     }), true;
   }
 
-  /* -------------------------------------------------- بررسی کد تأیید */
-
-  if (path === '/auth/verify' && req.method === 'POST') {
-    if (tooFast('otp:' + ip, 20)) return json(res, { ok: false, message: 'تلاش‌های زیاد' }, 429), true;
+  if (path === '/auth/login' && req.method === 'POST') {
+    if (tooFast('login:' + ip, AUTH.loginMaxPerMin)) {
+      return json(res, { ok: false, message: 'تلاش‌های زیاد — کمی صبر کنید' }, 429), true;
+    }
     const body = await readBody(req);
-    const phone = normalizePhone(body.phone);
-    const code = String(body.code || '').replace(/\D/g, '');
-    if (!phone) return json(res, { ok: false, message: 'شماره‌ی موبایل درست نیست' }), true;
+    const uname = D.normUsername(body.username);
 
-    const rec = otps.get(phone);
-    if (!rec) return json(res, { ok: false, message: 'ابتدا کد را درخواست کنید' }), true;
-    if (Date.now() > rec.exp) { otps.delete(phone); return json(res, { ok: false, message: 'کد منقضی شده' }), true; }
-    if (++rec.tries > AUTH.maxTries) { otps.delete(phone); return json(res, { ok: false, message: 'تعداد تلاش زیاد' }), true; }
-    if (rec.code !== code) return json(res, { ok: false, message: 'کد وارد شده درست نیست' }), true;
-    otps.delete(phone);
-
-    // اگر کاربر مهمان وارد بود، شماره را به همان حساب وصل کن تا سکه‌هایش نپرد
-    const existingToken = bearer(req) || body.token;
-    const current = existingToken ? D.userByToken(existingToken) : null;
-
-    let user = D.getUserByPhone(phone);
-    let isNew = false;
-
-    if (user) {
-      // شماره قبلاً حساب دارد → وارد همان می‌شویم
-    } else if (current && current.is_guest && !current.phone) {
-      const at = D.attachPhone(current.id, phone);
-      if (!at.ok) return json(res, { ok: false, message: at.reason }), true;
-      user = at.user;
-    } else {
-      user = D.createUser({ phone, isGuest: 0, ip });
-      isNew = true;
+    const wait = loginLocked(uname);
+    if (wait) {
+      return json(res, { ok: false, message: `تلاش‌های ناموفق زیاد — ${wait} ثانیه صبر کنید` }, 429), true;
     }
 
-    if (user.banned) return json(res, { ok: false, message: 'این حساب مسدود است: ' + (user.ban_reason || '') }), true;
+    const r = D.login(uname, body.password);
+    if (!r.ok) { noteLoginFail(uname); return json(res, r), true; }
+    clearLoginFails(uname);
 
-    D.touchUser(user.id, ip);
+    D.touchUser(r.user.id, ip);
     D.checkMultiAccount(ip);
-    const token = D.createSession(user.id, body.source || 'web', ip);
-    return json(res, { ok: true, token, isNew, profile: publicProfile(D.getUser(user.id)) }), true;
+    const token = D.createSession(r.user.id, body.source || 'web', ip);
+    return json(res, { ok: true, token, profile: publicProfile(D.getUser(r.user.id)) }), true;
+  }
+
+  /* بازیابی با کد یک‌بارمصرف */
+  if (path === '/auth/recover' && req.method === 'POST') {
+    if (tooFast('recover:' + ip, 5)) {
+      return json(res, { ok: false, message: 'تلاش‌های زیاد — کمی صبر کنید' }, 429), true;
+    }
+    const body = await readBody(req);
+    const r = D.recoverWithCode(body.username, body.code, body.password);
+    if (!r.ok) return json(res, r), true;
+
+    const token = D.createSession(r.user.id, 'web', ip);
+    return json(res, {
+      ok: true, token,
+      recovery: r.recovery,        // کد تازه — کد قبلی دیگر کار نمی‌کند
+      profile: publicProfile(D.getUser(r.user.id))
+    }), true;
+  }
+
+  /* آیا این نام کاربری آزاد است؟ برای بازخورد زنده‌ی فرم ثبت‌نام */
+  if (path === '/auth/check-username') {
+    const want = url.searchParams.get('u') || '';
+    const problem = D.usernameProblem(want);
+    if (problem) return json(res, { ok: true, available: false, message: problem }), true;
+    const taken = !!D.getUserByUsername(want);
+    return json(res, {
+      ok: true, available: !taken,
+      message: taken ? 'این نام کاربری گرفته شده است' : 'آزاد است'
+    }), true;
   }
 
   /* ------------------------------------------------------ ورود تلگرام */
@@ -308,10 +359,21 @@ async function handle(req, res, url) {
 
     let user = D.getUserByTelegram(tgUser.id);
     let isNew = false;
+
+    /* اگر کاربر همین حالا با حساب وبش وارد است و آن حساب هنوز تلگرام
+     * ندارد، همان را وصل می‌کنیم — تا دو حساب جدا با دو کیف پول نسازد. */
+    if (!user) {
+      const cur = D.userByToken(bearer(req) || body.token);
+      if (cur && !cur.telegram_id && !cur.banned) {
+        const at = D.attachTelegram(cur.id, tgUser.id);
+        if (at.ok) user = at.user;
+      }
+    }
+
     if (!user) {
       const name = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ').slice(0, 20)
         || tgUser.username || 'بازیکن';
-      user = D.createUser({ telegramId: String(tgUser.id), name, isGuest: 0, ip });
+      user = D.createUser({ telegramId: String(tgUser.id), name, isGuest: 1, ip });
       isNew = true;
     }
     if (user.banned) return json(res, { ok: false, message: 'این حساب مسدود است' }), true;
@@ -356,7 +418,13 @@ async function handle(req, res, url) {
   }
 
   const body = req.method === 'POST' ? await readBody(req) : {};
-  const done = (r) => json(res, r.ok ? { ...r, profile: publicProfile(D.getUser(me.id)) } : r);
+  /* profile همان چیزی است که کلاینت لازم دارد؛ ردیف خام user را
+   * دور می‌ریزیم تا ستون‌های داخلی بی‌دلیل بیرون نروند. */
+  const done = (r) => {
+    if (!r.ok) return json(res, r);
+    const { user, ...rest } = r;
+    return json(res, { ...rest, profile: publicProfile(D.getUser(me.id)) });
+  };
 
   switch (path) {
     case '/api/logout':
@@ -388,31 +456,109 @@ async function handle(req, res, url) {
         rows: D.db.prepare('SELECT id, kind, status, amount, toman, prize_name, created_at FROM claims WHERE user_id = ? ORDER BY created_at DESC LIMIT 30').all(me.id)
       }), true;
 
-    /* ------------------------------------------------------ فروشگاه */
+    /* ================================================================
+     *  کیف پول تتری
+     * ============================================================= */
 
-    case '/api/purchase/start': {
-      const pack = C.packById(body.packId);
-      if (!pack) return json(res, { ok: false, message: 'بسته یافت نشد' }), true;
-      const id = D.createPurchase(me.id, { id: pack.id, coins: C.packTotal(pack), price: pack.price });
-      // اینجا باید درگاه واقعی صدا زده شود و paymentUrl برگردد.
+    /* آدرس واریز و نرخ‌های روز */
+    case '/api/wallet': {
+      const d = D.listDeposits({ userId: me.id, limit: 20 });
+      const w = D.listWithdrawals({ userId: me.id, limit: 20 });
       return json(res, {
-        ok: true, purchaseId: id, price: pack.price, coins: C.packTotal(pack),
-        demo: !process.env.NARD_GATEWAY,
-        message: process.env.NARD_GATEWAY ? undefined : 'درگاه پرداخت تنظیم نشده — حالت نمایشی'
+        ok: true,
+        balance: me.balance || 0,
+        balanceUsdt: D.fmtUsdt(me.balance || 0),
+        rates: {
+          buy: D.setting('BUY_RATE'),          // میکرو-تتر برای هر سکه
+          sell: D.setting('SELL_RATE'),
+          buyMin: D.setting('BUY_MIN'),
+          sellMin: D.setting('SELL_MIN'),
+          depositMin: D.setting('DEPOSIT_MIN'),
+          withdrawMin: D.setting('WITHDRAW_MIN'),
+          withdrawFee: D.setting('WITHDRAW_FEE')
+        },
+        addresses: {
+          TRC20: D.setting('DEPOSIT_ADDRESS_TRC20') || '',
+          BEP20: D.setting('DEPOSIT_ADDRESS_BEP20') || ''
+        },
+        deposits: d.rows.map((r) => ({
+          id: r.id, network: r.network, amount: r.amount, credited: r.credited,
+          status: r.status, txid: r.txid, createdAt: r.created_at, note: r.admin_note
+        })),
+        withdrawals: w.rows.map((r) => ({
+          id: r.id, network: r.network, amount: r.amount, fee: r.fee, payout: r.payout,
+          address: r.address, status: r.status, txid: r.txid,
+          createdAt: r.created_at, note: r.admin_note
+        }))
       }), true;
     }
 
-    case '/api/purchase/complete': {
-      // ⚠️ در نسخه‌ی واقعی این مسیر فقط باید از سمت درگاه (callback) صدا زده شود،
-      //    نه از اپ. تا وقتی NARD_GATEWAY تنظیم نشده، حالت نمایشی است.
-      if (process.env.NARD_GATEWAY) {
-        return json(res, { ok: false, message: 'تسویه فقط از طریق درگاه انجام می‌شود' }, 403), true;
+    /* خرید سکه از بالانس — فوری */
+    case '/api/coins/buy': {
+      if (body.packId) {
+        const pack = C.packById(body.packId);
+        if (!pack) return json(res, { ok: false, message: 'بسته یافت نشد' }), true;
+        return done(D.buyPack(me.id, pack)), true;
       }
-      return done(D.completePurchase(body.purchaseId, 'DEMO' + Date.now().toString(36).toUpperCase(), 'demo')), true;
+      return done(D.buyCoins(me.id, body.coins)), true;
     }
 
-    case '/api/sell':
-      return done(D.requestSell(me.id, body.amount, body.dest)), true;
+    /* فروش سکه به بالانس — فوری */
+    case '/api/coins/sell':
+      return done(D.sellCoins(me.id, body.coins)), true;
+
+    /* ثبت واریز تتر؛ ادمین تأیید می‌کند */
+    case '/api/deposit': {
+      if (tooFast('dep:' + me.id, 5)) {
+        return json(res, { ok: false, message: 'درخواست‌های زیاد — کمی صبر کنید' }, 429), true;
+      }
+      const r = D.requestDeposit(me.id, {
+        amount: body.amount, txid: body.txid, network: body.network
+      });
+      return json(res, r.ok ? { ...r, message: 'ثبت شد — بعد از تأیید به بالانس اضافه می‌شود' } : r), true;
+    }
+
+    /* استفاده از کد وچر — فوری */
+    case '/api/voucher': {
+      if (tooFast('vouch:' + me.id, 10)) {
+        return json(res, { ok: false, message: 'تلاش‌های زیاد — کمی صبر کنید' }, 429), true;
+      }
+      return done(D.redeemVoucher(me.id, body.code)), true;
+    }
+
+    /* درخواست برداشت تتر */
+    case '/api/withdraw': {
+      if (tooFast('wd:' + me.id, 3)) {
+        return json(res, { ok: false, message: 'درخواست‌های زیاد — کمی صبر کنید' }, 429), true;
+      }
+      const r = D.requestWithdraw(me.id, {
+        amount: body.amount, address: body.address, network: body.network
+      });
+      return json(res, r.ok
+        ? { ...r, message: 'ثبت شد — بعد از بررسی واریز می‌شود', profile: publicProfile(D.getUser(me.id)) }
+        : r), true;
+    }
+
+    /* ================================================================
+     *  حساب کاربری
+     * ============================================================= */
+
+    case '/api/account/password':
+      return json(res, D.changePassword(me.id, body.oldPassword, body.newPassword)), true;
+
+    case '/api/account/recovery':
+      return json(res, D.regenerateRecovery(me.id, body.password)), true;
+
+    /* کد ۶ رقمی برای وصل کردن این حساب از دستگاه/تلگرام دیگر */
+    case '/api/account/link-code':
+      return json(res, D.createLinkCode(me.id)), true;
+
+    /* این حساب را در حسابی که کد را داده ادغام کن */
+    case '/api/account/link':
+      return json(res, D.consumeLinkCode(body.code, me.id)), true;
+
+    case '/api/account/unlink-telegram':
+      return done(D.detachTelegram(me.id)), true;
 
     /* -------------------------------------------------------- جوایز */
 
@@ -439,5 +585,5 @@ async function handle(req, res, url) {
 
 module.exports = {
   handle, json, readBody, clientIp, bearer, publicProfile,
-  normalizePhone, verifyTelegramInitData, sendSms, AUTH, tooFast
+  verifyTelegramInitData, AUTH, tooFast
 };

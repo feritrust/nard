@@ -7,13 +7,16 @@ import { adminApi, getToken, setToken, fa } from '@/lib/adminApi';
 import { Toast } from '@/components/ui';
 
 const NAV = [
-  { href: '/admin',          label: 'داشبورد',      icon: '📊' },
-  { href: '/admin/claims',   label: 'درخواست‌ها',   icon: '💳', badge: 'claims' },
-  { href: '/admin/users',    label: 'کاربران',      icon: '👥' },
-  { href: '/admin/fraud',    label: 'تقلب',         icon: '🚨', badge: 'fraud' },
-  { href: '/admin/games',    label: 'بازی‌ها',      icon: '🎲' },
-  { href: '/admin/settings', label: 'تنظیمات',      icon: '⚙️' },
-  { href: '/admin/log',      label: 'گزارش فعالیت', icon: '📜' }
+  { href: '/admin',              label: 'داشبورد',      icon: '📊' },
+  { href: '/admin/deposits',     label: 'واریزها',      icon: '💵', badge: 'deposits' },
+  { href: '/admin/withdrawals',  label: 'برداشت‌ها',    icon: '📤', badge: 'withdrawals' },
+  { href: '/admin/vouchers',     label: 'کد وچر',       icon: '🎟️' },
+  { href: '/admin/claims',       label: 'جایزه‌ها',     icon: '🎁', badge: 'claims' },
+  { href: '/admin/users',        label: 'کاربران',      icon: '👥' },
+  { href: '/admin/fraud',        label: 'تقلب',         icon: '🚨', badge: 'fraud' },
+  { href: '/admin/games',        label: 'بازی‌ها',      icon: '🎲' },
+  { href: '/admin/settings',     label: 'تنظیمات',      icon: '⚙️' },
+  { href: '/admin/log',          label: 'گزارش فعالیت', icon: '📜' }
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -23,14 +26,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const [admin, setAdmin] = useState<{ username: string; role: string } | null>(null);
   const [checked, setChecked] = useState(false);
-  const [badges, setBadges] = useState({ claims: 0, fraud: 0 });
+  const [badges, setBadges] = useState({ claims: 0, fraud: 0, deposits: 0, withdrawals: 0 });
   const [open, setOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; tone: 'ok' | 'err' } | null>(null);
 
   const refreshBadges = useCallback(async () => {
     try {
       const d = await adminApi.stats(1);
-      setBadges({ claims: d.stats.pending.claims, fraud: d.stats.pending.fraud });
+      const p = d.stats.pending;
+      setBadges({
+        claims: p.claims, fraud: p.fraud,
+        deposits: p.deposits, withdrawals: p.withdrawals
+      });
     } catch {}
   }, []);
 
@@ -87,9 +94,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           ☰
         </button>
         <span className="font-black">پنل مدیریت</span>
-        {(badges.claims > 0 || badges.fraud > 0) && (
+        {badges.claims + badges.fraud + badges.deposits + badges.withdrawals > 0 && (
           <span className="fa-nums mr-auto rounded-full bg-rose-400 px-2 py-0.5 text-[11px] font-black text-white">
-            {fa(badges.claims + badges.fraud)}
+            {fa(badges.claims + badges.fraud + badges.deposits + badges.withdrawals)}
           </span>
         )}
       </header>
@@ -107,7 +114,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <nav className="space-y-1">
             {NAV.map((n) => {
               const active = pathname === n.href || (n.href !== '/admin' && pathname.startsWith(n.href));
-              const count = n.badge === 'claims' ? badges.claims : n.badge === 'fraud' ? badges.fraud : 0;
+              const count = n.badge ? (badges as Record<string, number>)[n.badge] || 0 : 0;
               return (
                 <Link
                   key={n.href}

@@ -15,13 +15,16 @@ const ROOMS = [
   { id: 'r100000', name: 'اتاق افسانه‌ای', entry: 100000, icon: '👑', color: '#a78bfa', minLevel: 8, skin: 'dragon' }
 ];
 
+/* بسته‌های سکه — قیمت از روی BUY_RATE در تنظیمات حساب می‌شود، نه اینجا.
+ * bonus درصد سکه‌ی اضافه است: کاربر پول coins را می‌دهد ولی
+ * coins × (۱ + bonus/۱۰۰) سکه می‌گیرد. */
 const COIN_PACKS = [
-  { id: 'p1', coins: 5000,    price: 19000,   bonus: 0,   icon: '💰', tag: '' },
-  { id: 'p2', coins: 15000,   price: 49000,   bonus: 10,  icon: '💰', tag: '۱۰٪ هدیه' },
-  { id: 'p3', coins: 50000,   price: 149000,  bonus: 20,  icon: '🪙', tag: '۲۰٪ هدیه' },
-  { id: 'p4', coins: 150000,  price: 399000,  bonus: 30,  icon: '🏆', tag: 'محبوب‌ترین' },
-  { id: 'p5', coins: 500000,  price: 1190000, bonus: 40,  icon: '👑', tag: '۴۰٪ هدیه' },
-  { id: 'p6', coins: 1500000, price: 2990000, bonus: 50,  icon: '💎', tag: 'بهترین ارزش' }
+  { id: 'p1', coins: 10000,   bonus: 0,  icon: '💰', tag: '' },
+  { id: 'p2', coins: 50000,   bonus: 5,  icon: '💰', tag: '۵٪ هدیه' },
+  { id: 'p3', coins: 150000,  bonus: 10, icon: '🪙', tag: '۱۰٪ هدیه' },
+  { id: 'p4', coins: 500000,  bonus: 15, icon: '🏆', tag: 'محبوب‌ترین' },
+  { id: 'p5', coins: 1500000, bonus: 20, icon: '👑', tag: '۲۰٪ هدیه' },
+  { id: 'p6', coins: 5000000, bonus: 30, icon: '💎', tag: 'بهترین ارزش' }
 ];
 
 const PRIZES = [

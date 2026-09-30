@@ -72,13 +72,14 @@ export function Button({
 }
 
 export function Input({
-  value, onChange, placeholder, type = 'text', ltr, className = '', onKeyDown, autoFocus, maxLength
+  value, onChange, placeholder, type = 'text', ltr, className = '', onKeyDown,
+  autoFocus, maxLength, label, hint
 }: {
   value: string; onChange: (v: string) => void; placeholder?: string; type?: string;
   ltr?: boolean; className?: string; onKeyDown?: (e: React.KeyboardEvent) => void;
-  autoFocus?: boolean; maxLength?: number;
+  autoFocus?: boolean; maxLength?: number; label?: string; hint?: string;
 }) {
-  return (
+  const field = (
     <input
       type={type}
       value={value}
@@ -90,6 +91,14 @@ export function Input({
       dir={ltr ? 'ltr' : 'rtl'}
       className={`w-full rounded-xl border border-ink-500 bg-ink-900 px-3.5 py-2.5 text-sm outline-none transition placeholder:text-ink-300/60 focus:border-gold-400 ${ltr ? 'text-left' : ''} ${className}`}
     />
+  );
+  if (!label && !hint) return field;
+  return (
+    <label className="mt-3 block">
+      {label && <span className="mb-1.5 block text-xs font-bold text-ink-300">{label}</span>}
+      {field}
+      {hint && <span className="mt-1.5 block text-[11px] text-ink-300">{hint}</span>}
+    </label>
   );
 }
 

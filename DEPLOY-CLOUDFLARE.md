@@ -105,10 +105,6 @@ nano /opt/nard/server/.env
 ```
 
 ```ini
-# ⚠️⚠️ حتماً 0 — وگرنه کد تأیید در پاسخ API برمی‌گردد
-#       یعنی هر کسی با هر شماره‌ای وارد می‌شود
-NARD_DEV_CODE=0
-
 PORT=8080
 NARD_HOST=127.0.0.1
 NARD_DATA=/opt/nard/server/data
@@ -152,11 +148,6 @@ systemctl restart nard-web
 cd /opt/nard/server
 sudo -u nard node create-admin.js owner '<یک رمز قوی>' owner
 ```
-
-> پیامک هنوز به هیچ سرویسی وصل نیست — کد ورود در لاگ سرور چاپ می‌شود:
-> `journalctl -u nard-server -f | grep sms`
-> برای تست خودتان کافی است؛ قبل از باز کردن روی کاربر واقعی باید یک سرویس
-> پیامک ایرانی (کاوه‌نگار، ملی‌پیامک و…) در `sendSms` داخل `server/api.js` وصل شود.
 
 خروجی یک **QR / کلید TOTP** می‌دهد — همان لحظه در Google Authenticator یا
 Authy اسکن کنید. بدون آن نمی‌توانید وارد پنل شوید.
@@ -214,7 +205,7 @@ sudo bash deploy/enable-ssl.sh --cloudflare
 
 بدون آن nginx همه‌ی بازیکن‌ها را با IP سرورهای کلادفلر می‌بیند:
 
-- محدودیت نرخ پیامک روی یک IP مشترک اعمال می‌شود؛ یک نفر ورود کل سایت را قفل می‌کند
+- محدودیت نرخ ورود و ثبت‌نام روی یک IP مشترک اعمال می‌شود؛ یک نفر ورود کل سایت را قفل می‌کند
 - تشخیص مولتی‌اکانت همه را متقلب می‌بیند
 - پاداش دعوت دوستان برای هیچ‌کس فعال نمی‌شود
 
@@ -312,7 +303,7 @@ systemctl restart nard-server nard-web
 | وب‌سوکت وصل نمی‌شود | WebSockets خاموش یا مسیر `/ws` اشتباه | Network → WebSockets = On |
 | بازی بعد از ~۲ دقیقه سکوت قطع می‌شود | ping سرور کار نمی‌کند | سرور هر ۳۰ ثانیه ping می‌فرستد؛ نسخه‌ی به‌روز را deploy کنید |
 | همه‌ی کاربرها «مولتی‌اکانت» علامت می‌خورند | `cloudflare-realip.conf` نصب نشده | مرحله‌ی ۵ |
-| با هر شماره‌ای می‌شود وارد شد | `NARD_DEV_CODE` صفر نیست | `.env` را درست کنید و `systemctl restart nard-server` |
+| سرور بالا نمی‌آید و از دیتابیس قدیمی می‌گوید | اسکیمای نسخه‌ی قبلی | `node server/reset-db.js` بعد ری‌استارت |
 | build سایت kill می‌شود | RAM کم | swap بسازید (مرحله‌ی ۳) |
 | `no "ssl_certificate" is defined` | پیکربندی SSL قبل از گرفتن گواهی نصب شده | `sudo bash deploy/enable-ssl.sh` |
 | پنل ادمین لاگین نمی‌شود / خطای JSON | nginx مسیر API ادمین را به Next.js می‌دهد | نسخه‌ی به‌روز را pull کنید (API حالا `/adminapi/` است) |
@@ -325,11 +316,13 @@ systemctl restart nard-server nard-web
 
 ## چک‌لیست قبل از اینکه به کسی لینک بدهید
 
-- [ ] `NARD_DEV_CODE=0` و سرویس ری‌استارت شده
+- [ ] `NARD_HOST=127.0.0.1` در `.env` و سرویس ری‌استارت شده
 - [ ] `NARD_SECRET` مقدار تصادفی گرفته (پیش‌فرض نمانده)
 - [ ] SSL کلادفلر روی **Full (strict)**
 - [ ] `cloudflare-realip.conf` نصب و IP کاربرها در دیتابیس واقعی است
 - [ ] ادمین ساخته شده و TOTP در گوشی ذخیره شده
+- [ ] `DEPOSIT_ADDRESS_TRC20` در پنل تنظیم شده (وگرنه کاربر نمی‌تواند شارژ کند)
+- [ ] نرخ‌ها چک شده: `SELL_RATE` باید از `BUY_RATE` **کمتر** باشد
 - [ ] `https://farhadtest.ir/admin` در `robots.txt` مسدود است
 - [ ] پشتیبان‌گیری خودکار در crontab
 - [ ] مجوز فایل `.env` روی ۶۰۰ و مالک `nard`

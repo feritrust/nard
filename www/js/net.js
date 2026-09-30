@@ -40,7 +40,7 @@
     botFallback: true,
     speed: 1,                  // ضریب سرعت ربات (برای تست خودکار کوچک می‌شود)
     turnMs: 30000,             // مهلت هر مرحله‌ی نوبت (انداختن تاس / حرکت دادن)
-    timeoutStrikes: 3,         // بعد از این تعداد تایم‌اوت پشت‌سرهم، بازی باخته می‌شود
+    autoRounds: 2,             // سیستم تا این تعداد نوبت به‌جای بازیکن بازی می‌کند، بعد باخت
     reconnectMs: 45000         // مهلت بازگشت بعد از قطع اتصال
   };
 
@@ -103,7 +103,7 @@
     this._timers = [];
     this._closed = false;
     this.turnDeadline = 0;      // زمان پایان نوبت (میلی‌ثانیه)
-    this.strikes = 0;           // تعداد تایم‌اوت‌های پشت‌سرهم
+    this.autoPlayed = 0;        // چند نوبت پشت‌سرهم سیستم به‌جای بازیکن بازی کرده
     this._turnTimer = null;
   }
   BotSession.prototype = Object.create(Emitter.prototype);
@@ -128,10 +128,13 @@
   BotSession.prototype._onTimeout = function () {
     var st = this.state;
     if (this._closed || !st || st.done || st.turn !== this.me) return;
-    this.strikes++;
-    this.emit('timeout', { player: this.me, strikes: this.strikes, max: NetConfig.timeoutStrikes });
+    this.autoPlayed++;
+    this.emit('timeout', {
+      player: this.me, auto: this.autoPlayed, max: NetConfig.autoRounds,
+      left: Math.max(0, NetConfig.autoRounds - this.autoPlayed + 1)
+    });
 
-    if (this.strikes >= NetConfig.timeoutStrikes) {
+    if (this.autoPlayed > NetConfig.autoRounds) {
       this._clearTimer();
       st.done = true; st.winner = -this.me; st.result = 1; st.resign = true;
       this.emit('end', {
@@ -213,7 +216,7 @@
     var st = this.state;
     if (this._closed || st.done || st.turn !== this.me || st.dice.length) return;
     Engine.rollDice(st);
-    this.strikes = 0;
+    this.autoPlayed = 0;
     this.emit('roll', { player: this.me, dice: st.dice.slice(), state: st });
     this._armTimer();                      // فرصت تازه برای حرکت دادن مهره
     this._checkStuck();
@@ -224,7 +227,7 @@
     var st = this.state;
     if (this._closed || st.done || st.turn !== this.me) return false;
     Engine.applyMove(st, this.me, mv);
-    this.strikes = 0;
+    this.autoPlayed = 0;
     this.emit('move', { player: this.me, move: mv, state: st });
     return true;
   };
@@ -576,7 +579,7 @@
         this.emit('oppReconnected', m);
         break;
       case 'timeout':
-        this.emit('timeout', { player: m.player, strikes: m.strikes, max: m.max });
+        this.emit('timeout', { player: m.player, auto: m.auto, max: m.max, left: m.left, away: m.away });
         break;
       case 'error':
         this.emit('error', m);

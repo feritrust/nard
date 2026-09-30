@@ -57,8 +57,12 @@ const SESSION_SECRET = process.env.NARD_SECRET || crypto.randomBytes(24).toStrin
 const CONFIG = {
   botAfterMs: 8000,        // بعد از این مدت انتظار، ربات وارد می‌شود
   turnMs: 30000,           // مهلت هر مرحله‌ی نوبت (تاس انداختن / حرکت دادن)
-  timeoutStrikes: 3,       // بعد از این تعداد تایم‌اوت پشت‌سرهم، بازی باخته می‌شود
-  reconnectMs: 45000,      // مهلت بازگشت بازیکن بعد از قطع اتصال
+  /* وقتی بازیکن قطع است: هر نوبتش این‌قدر صبر می‌کنیم، بعد سیستم
+   * به‌جایش بازی می‌کند. دو نوبت خودکار یعنی حدود یک دقیقه فرصت
+   * برگشتن — برای یک قطعی لحظه‌ای اینترنت کافی است. */
+  awayTurnMs: 15000,
+  autoRounds: 2,           // سیستم تا این تعداد نوبت به‌جای بازیکن بازی می‌کند، بعد باخت
+  reconnectMs: 45000,      // فقط برای نمایش شمارش معکوس به حریف
   rakePercent: 10,
   rakeMinEntry: 1000,
   energyPerCoins: 100,
@@ -289,8 +293,11 @@ class Match {
     this.ended = false;
     this.turnSeq = 0;          // شماره‌ی نوبت — جلوی «رد شدن دوباره‌ی نوبت» را می‌گیرد
     this.turnDeadline = 0;
-    this.strikes = { 1: 0, '-1': 0 };
+    /* چند نوبت پشت‌سرهم سیستم به‌جای این بازیکن بازی کرده.
+     * با هر حرکت واقعی خودش صفر می‌شود. */
+    this.autoPlayed = { 1: 0, '-1': 0 };
     this.dropped = { 1: null, '-1': null };   // بازیکن قطع‌شده و توکنش
+    this.awaySince = { 1: 0, '-1': 0 };       // از کی قطع است
     this.paused = false;
     this.users = { 1: a ? a.user : null, '-1': b ? b.user : null };
     this.userIds = { 1: a ? a.userId : null, '-1': b ? b.userId : null };
@@ -357,24 +364,46 @@ class Match {
   armTurnTimer() {
     clearTimeout(this._tt);
     if (this.ended || this.paused) { this.turnDeadline = 0; return; }
-    this.turnDeadline = Date.now() + CONFIG.turnMs;
     const seat = this.state.turn;
-    if (this.isBot(seat)) return;                 // ربات خودش سریع بازی می‌کند
-    this._tt = setTimeout(() => this.onTimeout(seat), CONFIG.turnMs + 150);
+    if (this.isBot(seat)) { this.turnDeadline = 0; return; }   // ربات خودش بازی می‌کند
+
+    /* اگر بازیکن قطع است، حریفش نباید ۳۰ ثانیه به صفحه‌ی بی‌حرکت نگاه کند —
+     * زودتر به‌جایش بازی می‌کنیم. */
+    const ms = this.dropped[seat] ? CONFIG.awayTurnMs : CONFIG.turnMs;
+    this.turnDeadline = Date.now() + ms;
+    this._tt = setTimeout(() => this.onTimeout(seat), ms + 150);
   }
 
   clearTurnTimer() { clearTimeout(this._tt); this._tt = null; this.turnDeadline = 0; }
 
-  /** وقت بازیکن تمام شد */
+  /**
+   * وقت بازیکن تمام شد — چه قطع شده باشد چه فقط حواسش نباشد.
+   *
+   * سیستم تا CONFIG.autoRounds نوبت به‌جایش تاس می‌ریزد و بازی می‌کند.
+   * نوبت بعد از آن، بازی را می‌بازد.
+   *
+   * با هر حرکت واقعی خودش شمارنده صفر می‌شود، پس کسی که برمی‌گردد
+   * دوباره فرصت کامل دارد.
+   */
   onTimeout(seat) {
     const st = this.state;
     if (this.ended || this.paused || st.done || st.turn !== seat) return;
-    this.strikes[seat]++;
-    this.broadcast({ t: 'timeout', player: seat, strikes: this.strikes[seat], max: CONFIG.timeoutStrikes });
 
-    if (this.strikes[seat] >= CONFIG.timeoutStrikes) {
-      return this.finish(-seat, 1, true, 'timeout');
+    this.autoPlayed[seat]++;
+    const left = CONFIG.autoRounds - this.autoPlayed[seat] + 1;
+
+    this.broadcast({
+      t: 'timeout', player: seat,
+      auto: this.autoPlayed[seat], max: CONFIG.autoRounds,
+      left: Math.max(0, left),
+      away: !!this.dropped[seat]
+    });
+
+    if (this.autoPlayed[seat] > CONFIG.autoRounds) {
+      console.log(`[auto] ${this.id} نشست ${seat} برنگشت — باخت`);
+      return this.finish(-seat, 1, true, this.dropped[seat] ? 'disconnect' : 'timeout');
     }
+
     this.autoPlay(seat);
   }
 
@@ -406,6 +435,12 @@ class Match {
 
   checkStuck() {
     const st = this.state;
+    /* ⚠️ تا وقتی تاس ریخته نشده، hasAnyMove همیشه false است — چون
+     * حرکتی بدون تاس وجود ندارد. بدون این شرط، نوبت هر بازیکنی که
+     * ۱.۲ ثانیه دیرتر دکمه‌ی تاس را بزند «گیر کرده» حساب می‌شد و رد
+     * می‌شد. برای بازیکن قطع‌شده این یعنی نوبتش هیچ‌وقت به تایم‌اوت
+     * نمی‌رسید و سیستم هرگز به‌جایش بازی نمی‌کرد. */
+    if (!st.dice.length) return;
     if (st.done || Engine.hasAnyMove(st, st.turn)) return;
     const seq = this.turnSeq;
     this.later(() => {
@@ -426,7 +461,7 @@ class Match {
 
       case 'roll':
         if (st.turn !== seat || st.dice.length || st.done || this.paused) return;
-        this.strikes[seat] = 0;
+        this.autoPlayed[seat] = 0;
         Engine.rollDice(st);
         this.armTurnTimer();               // فرصت تازه برای حرکت دادن مهره
         this.broadcast({ t: 'roll', player: seat, dice: st.dice.slice(), state: snapshot(st, this) });
@@ -435,7 +470,7 @@ class Match {
 
       case 'move': {
         if (st.turn !== seat || !st.dice.length || st.done || this.paused) return;
-        this.strikes[seat] = 0;
+        this.autoPlayed[seat] = 0;
         const legal = Engine.legalFirstMoves(st, seat);
         const mv = legal.find((x) =>
           String(x.from) === String(m.move.from) &&
@@ -514,20 +549,21 @@ class Match {
           if (stale()) return;
           this.broadcast({ t: 'nomove', player: st.turn });
           this.advance();
-        }, 900);
+        }, 900 + Math.random() * 700);
         return;
       }
       let i = 0;
       const step = () => {
         if (stale()) return;
-        if (i >= pick.seq.length) { this.advanceLater(400); return; }
+        if (i >= pick.seq.length) { this.advanceLater(400 + Math.random() * 400); return; }
         const mv = pick.seq[i++];
         Engine.applyMove(st, st.turn, mv);
         this.broadcast({ t: 'move', player: st.turn, move: mv, state: snapshot(st, this) });
-        this.later(step, 430 + Math.random() * 260);
+        this.later(step, AI.moveDelay());
       };
-      this.later(step, AI.thinkTime(this.botLevel));
-    }, 600 + Math.random() * 600);
+      // مکث متناسب با تعداد گزینه‌ها — حرکت اجباری سریع، تصمیم سخت کند
+      this.later(step, AI.thinkTime(this.botLevel, pick.options));
+    }, AI.rollDelay());
   }
 
   finish(winner, result, resign, reason) {
@@ -581,25 +617,35 @@ class Match {
     this.finish(-seat, 1, true, 'left');
   }
 
-  /** ارتباط بازیکن قطع شد → مهلت بازگشت می‌دهیم */
+  /**
+   * ارتباط بازیکن قطع شد.
+   *
+   * بازی **متوقف نمی‌شود**. حریفش نباید به صفحه‌ی یخ‌زده نگاه کند؛
+   * سیستم به‌جای بازیکن قطع‌شده بازی می‌کند (حداکثر CONFIG.autoRounds نوبت)
+   * و اگر برنگشت، بازی را می‌بازد.
+   */
   playerDropped(client) {
     const seat = this.seatOf(client);
     if (!seat || this.ended) return;
 
     this.seats[seat] = null;
     this.dropped[seat] = { token: client.token, at: Date.now() };
-    this.paused = true;
-    this.clearTurnTimer();
+    this.awaySince[seat] = Date.now();
+    this.paused = false;
 
-    console.log(`[drop] ${this.id} ${this.userAt(seat).name} قطع شد — ${CONFIG.reconnectMs / 1000}s مهلت`);
-    this.send(-seat, { t: 'oppDisconnected', graceMs: CONFIG.reconnectMs, name: this.userAt(seat).name });
+    console.log(`[drop] ${this.id} ${this.userAt(seat).name} قطع شد — تا ${CONFIG.autoRounds} نوبت خودکار`);
+    this.send(-seat, {
+      t: 'oppDisconnected',
+      graceMs: CONFIG.reconnectMs,
+      autoRounds: CONFIG.autoRounds,
+      name: this.userAt(seat).name
+    });
 
     clearTimeout(this._grace);
-    this._grace = setTimeout(() => {
-      if (this.ended) return;
-      console.log(`[drop] ${this.id} مهلت تمام شد — باخت`);
-      this.finish(-seat, 1, true, 'disconnect');
-    }, CONFIG.reconnectMs);
+
+    /* اگر همین حالا نوبت خودش است، تایمر کوتاه بخورد تا زود خودکار شود.
+     * اگر نوبت حریف است، بازی عادی ادامه دارد و نوبت بعدی‌اش خودکار می‌شود. */
+    if (this.state.turn === seat) this.armTurnTimer();
   }
 
   /** بازیکن با توکنش برگشت */
@@ -612,6 +658,8 @@ class Match {
 
     clearTimeout(this._grace);
     this.dropped[seat] = null;
+    this.awaySince[seat] = 0;
+    this.autoPlayed[seat] = 0;      // برگشت — شمارنده‌ی نوبت خودکار صفر
     this.seats[seat] = client;
     client.match = this;
     client.token = token;
@@ -796,9 +844,8 @@ server.listen(PORT, HOST, () => {
   console.log('  وب‌سوکت: ws://localhost:' + PORT);
   console.log('  سلامت:   http://localhost:' + PORT + '/health');
   console.log('  ربات بعد از ' + (CONFIG.botAfterMs / 1000) + ' ثانیه انتظار وارد بازی می‌شود.');
-  console.log('  مهلت هر نوبت: ' + (CONFIG.turnMs / 1000) + ' ثانیه • مهلت بازگشت بعد از قطعی: ' + (CONFIG.reconnectMs / 1000) + ' ثانیه');
-  console.log('  ورود با شماره موبایل فعال است. کد تأیید در همین کنسول چاپ می‌شود.');
-  if (API.AUTH.devReturnCode) console.log('  ⚠️  حالت توسعه: کد تأیید در پاسخ سرور هم برمی‌گردد. برای انتشار NARD_DEV_CODE=0 بگذارید.');
+  console.log('  مهلت هر نوبت: ' + (CONFIG.turnMs / 1000) + ' ثانیه • بعد از قطعی تا ' + CONFIG.autoRounds + ' نوبت خودکار بازی می‌شود');
+  console.log('  ورود با نام کاربری و رمز • بالانس تتری • واریز با TXID و کد وچر');
   if (process.env.NARD_TRUST_PROXY !== '0' && !/^(127\.|::1|localhost)/.test(HOST)) {
     console.log('  ⚠️  سرور روی ' + HOST + ' گوش می‌دهد و هدرهای پراکسی را باور می‌کند.');
     console.log('      پشت nginx حتماً NARD_HOST=127.0.0.1 بگذارید، وگرنه IP کاربر قابل جعل است.');
@@ -806,11 +853,10 @@ server.listen(PORT, HOST, () => {
   console.log('  پنل ادمین: اول یک ادمین بسازید →  node create-admin.js <نام‌کاربری> <رمز> owner');
 });
 
-// پاک کردن کدهای منقضی و محدودیت‌های قدیمی
+// نشست‌ها و کدهای لینکِ منقضی
 setInterval(() => {
-  const now = Date.now();
-  for (const [k, v] of otps) if (now > v.exp) otps.delete(k);
-  for (const [k, t] of smsRate) if (now - t > 10 * 60 * 1000) smsRate.delete(k);
-}, 60 * 1000).unref();
+  try { DB.db.prepare('DELETE FROM link_codes WHERE expires_at < ?').run(Date.now()); } catch (e) {}
+  try { DB.db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now()); } catch (e) {}
+}, 10 * 60 * 1000).unref();
 
 process.on('uncaughtException', (e) => console.error('[uncaught]', e));

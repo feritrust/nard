@@ -125,10 +125,10 @@ export default function ClaimsPage() {
                           <span className="fa-nums mr-2 text-ink-300">({fa(c.user_coins)} سکه)</span>
                         </dd>
                       </div>
-                      {c.user_phone && (
+                      {c.user_username && (
                         <div className="flex gap-2">
-                          <dt className="text-ink-300">شماره:</dt>
-                          <dd className="fa-nums" dir="ltr">{c.user_phone}</dd>
+                          <dt className="text-ink-300">نام کاربری:</dt>
+                          <dd dir="ltr">{c.user_username}</dd>
                         </div>
                       )}
                       {c.dest && (

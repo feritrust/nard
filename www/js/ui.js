@@ -252,20 +252,25 @@
   }
 
   /* =====================================================================
-   *  ورود با شماره‌ی موبایل
+   *  ثبت‌نام، ورود و بازیابی با نام کاربری و رمز
    * ===================================================================== */
 
-  var authPhone = null, resendTimer = null, resendLeft = 0;
+  var pendingRecovery = null;     // کد بازیابی که باید یک بار نشان داده شود
+  var userCheckTimer = null;
 
   function buildAuth() {
-    $('#btn-go-phone').onclick = function () { SFX.tap(); go('screen-phone'); };
+    $('#btn-go-signup').onclick = function () { SFX.tap(); go('screen-signup'); };
+    $('#btn-go-login').onclick  = function () { SFX.tap(); go('screen-signin'); };
+    $('#btn-signin-to-signup').onclick = function () { SFX.tap(); go('screen-signup', true); };
+    $('#btn-signup-to-signin').onclick = function () { SFX.tap(); go('screen-signin', true); };
+    $('#btn-go-recover').onclick = function () { SFX.tap(); go('screen-recover'); };
 
     $('#btn-guest').onclick = function () {
       SFX.tap();
-      confirmDialog('ورود مهمان',
-        'بدون شماره می‌توانید بازی کنید، اما اگر اپ را پاک کنید یا گوشی عوض کنید <b>سکه‌ها و جوایزتان از بین می‌رود</b>.<br>مطمئنید؟',
+      confirmDialog('بازی به‌عنوان مهمان',
+        'بدون حساب می‌توانید بازی کنید، اما اگر مرورگر را پاک کنید یا دستگاه عوض کنید ' +
+        '<b>سکه‌ها و جوایزتان از بین می‌رود</b>.<br>هر وقت خواستید می‌توانید از تنظیمات حساب بسازید.',
         'ادامه به‌عنوان مهمان', function () {
-          // اگر سرور در دسترس است، همین حالا یک حساب مهمان روی سرور بساز
           if (window.API && window.API.reachable && !window.API.token) {
             window.API.loginGuest(P.name || '', P.avatar).then(function (d) {
               if (d.ok && d.profile) { S.applyServerProfile(d.profile); refreshWallet(); }
@@ -277,137 +282,199 @@
         });
     };
 
-    $('#in-phone').oninput = function () {
-      this.value = this.value.replace(/[^\d+]/g, '');
+    /* ── فرم ثبت‌نام ─────────────────────────────────────── */
+
+    var uIn = $('#in-reg-user'), pIn = $('#in-reg-pass'), p2In = $('#in-reg-pass2');
+
+    uIn.oninput = function () {
+      // نام کاربری همیشه حروف کوچک انگلیسی
+      this.value = this.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
+      var hint = $('#user-hint');
+      var problem = Auth.usernameProblem(this.value);
+      if (!this.value) { setHint(hint, '', ''); return; }
+      if (problem) { setHint(hint, problem, 'bad'); return; }
+
+      setHint(hint, 'در حال بررسی…', '');
+      clearTimeout(userCheckTimer);
+      var want = this.value;
+      userCheckTimer = setTimeout(function () {
+        Auth.checkUsername(want).then(function (r) {
+          if (uIn.value !== want) return;    // کاربر در این فاصله تایپ کرده
+          setHint(hint, r.available ? '✓ آزاد است' : (r.message || 'گرفته شده'),
+            r.available ? 'ok' : 'bad');
+        });
+      }, 420);
     };
 
-    $('#btn-send-code').onclick = function () { sendCode(false); };
-    $('#btn-resend').onclick = function () { sendCode(true); };
-    $('#btn-change-phone').onclick = function () { SFX.tap(); back(); };
-    $('#btn-verify-code').onclick = verifyCode;
+    pIn.oninput = function () {
+      var hint = $('#pass-hint');
+      if (!this.value) { setHint(hint, '', ''); return; }
+      var problem = Auth.passwordProblem(this.value);
+      if (problem) { setHint(hint, problem, 'bad'); return; }
+      var lvl = Auth.passwordStrength(this.value);
+      var label = ['خیلی ضعیف', 'ضعیف', 'متوسط', 'خوب', 'عالی'][lvl];
+      setHint(hint, 'قدرت رمز: ' + label, lvl >= 2 ? 'ok' : '');
+    };
 
-    // خانه‌های کد تأیید: پر شدن خودکار و حرکت بین خانه‌ها
-    var boxes = $$('.otp-box');
-    boxes.forEach(function (bx, i) {
-      bx.oninput = function () {
-        bx.value = bx.value.replace(/[^\d]/g, '').slice(0, 1);
-        bx.classList.toggle('filled', !!bx.value);
-        if (bx.value && i < boxes.length - 1) boxes[i + 1].focus();
-        if (boxes.every(function (b) { return b.value; })) setTimeout(verifyCode, 120);
-      };
-      bx.onkeydown = function (e) {
-        if (e.key === 'Backspace' && !bx.value && i > 0) { boxes[i - 1].focus(); boxes[i - 1].value = ''; boxes[i - 1].classList.remove('filled'); }
-      };
-      bx.onpaste = function (e) {
-        var t = (e.clipboardData || window.clipboardData).getData('text').replace(/[^\d]/g, '');
-        if (!t) return;
-        e.preventDefault();
-        boxes.forEach(function (b, k) { b.value = t[k] || ''; b.classList.toggle('filled', !!b.value); });
-        if (t.length >= boxes.length) setTimeout(verifyCode, 120);
-      };
-    });
+    $('#btn-do-signup').onclick = doSignup;
+    p2In.onkeydown = function (e) { if (e.key === 'Enter') doSignup(); };
+
+    /* ── فرم ورود ────────────────────────────────────────── */
+
+    $('#in-login-user').oninput = function () {
+      this.value = this.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    };
+    $('#btn-do-login').onclick = doLogin;
+    $('#in-login-pass').onkeydown = function (e) { if (e.key === 'Enter') doLogin(); };
+
+    /* ── کد بازیابی ──────────────────────────────────────── */
+
+    $('#chk-saved-recovery').onchange = function () {
+      $('#btn-recovery-done').disabled = !this.checked;
+    };
+    $('#btn-copy-recovery').onclick = function () {
+      copyText($('#recovery-code').textContent.trim(), 'کد بازیابی کپی شد');
+    };
+    $('#btn-recovery-done').onclick = function () {
+      SFX.tap();
+      pendingRecovery = null;
+      go(S.get().name ? 'screen-home' : 'screen-login', true);
+    };
+
+    /* ── بازیابی حساب ────────────────────────────────────── */
+
+    $('#in-rec-user').oninput = function () {
+      this.value = this.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    };
+    $('#in-rec-code').oninput = function () {
+      var pos = this.selectionStart === this.value.length;
+      this.value = Auth.normRecovery(this.value);
+      if (pos) this.selectionStart = this.selectionEnd = this.value.length;
+    };
+    $('#btn-do-recover').onclick = doRecover;
   }
 
-  function otpValue() {
-    return $$('.otp-box').map(function (b) { return b.value || ''; }).join('');
-  }
-  function clearOtp() {
-    $$('.otp-box').forEach(function (b) { b.value = ''; b.classList.remove('filled'); });
+  function setHint(el, text, cls) {
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = 'hint' + (cls ? ' ' + cls : '');
   }
 
-  function startResendTimer() {
-    clearInterval(resendTimer);
-    resendLeft = Auth.RESEND_SECONDS;
-    var btn = $('#btn-resend');
-    function tick() {
-      if (resendLeft <= 0) {
-        clearInterval(resendTimer);
-        btn.disabled = false;
-        btn.textContent = 'ارسال دوباره‌ی کد';
-        return;
-      }
-      btn.disabled = true;
-      btn.textContent = 'ارسال دوباره تا ' + fa(resendLeft) + ' ثانیه';
-      resendLeft--;
+  function copyText(text, okMsg) {
+    var done = function () { toast(okMsg || 'کپی شد', 'ok'); SFX.tap(); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else fallback();
+
+    function fallback() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        done();
+      } catch (e) { toast('کپی نشد — دستی انتخاب کنید', 'err'); }
     }
-    tick();
-    resendTimer = setInterval(tick, 1000);
   }
 
-  function sendCode(isResend) {
-    var raw = isResend ? authPhone : $('#in-phone').value;
-    var phone = Auth.normalizePhone(raw);
-    if (!phone) { toast('شماره‌ی موبایل درست نیست (مثال: ۰۹۱۲۱۲۳۴۵۶۷)', 'err', 2600); return; }
-
-    var btn = isResend ? $('#btn-resend') : $('#btn-send-code');
-    var old = btn.textContent;
-    btn.disabled = true; btn.textContent = 'در حال ارسال…';
-
-    Auth.requestCode(phone).then(function (r) {
-      btn.disabled = false; btn.textContent = old;
-      if (!r.ok) { toast(r.message || 'ارسال کد ناموفق بود', 'err', 2600); return; }
-
-      authPhone = phone;
-      $('#otp-phone').textContent = Auth.prettyPhone(phone);
-      clearOtp();
-
-      var dev = $('#dev-code');
-      if (r.devCode) {
-        dev.style.display = '';
-        dev.innerHTML = (r.mode === 'local'
-          ? 'سرور در دسترس نیست، پس کد را همین‌جا نشان می‌دهیم:<br>'
-          : 'حالت تست — کد شما:<br>') + '<b>' + r.devCode + '</b>';
-      } else {
-        dev.style.display = 'none';
-      }
-
-      if (!isResend) go('screen-otp');
-      startResendTimer();
-      setTimeout(function () { var b = $$('.otp-box')[0]; if (b) b.focus(); }, 250);
-      toast('کد تأیید ارسال شد', 'ok');
+  /** بعد از ورود موفق: پروفایل را از سرور بگیر و به صفحه‌ی درست برو */
+  function afterAuth(r, nextScreen) {
+    window.API.setToken(r.token);
+    window.API.online = true;
+    return window.API.me().then(function (d) {
+      if (d.ok && d.profile) { S.applyServerProfile(d.profile); refreshWallet(); }
+      var P2 = S.get();
+      P2.verified = true;
+      P2.authToken = r.token;
+      S.save();
+      go(nextScreen || (P2.name ? 'screen-home' : 'screen-login'), true);
     });
   }
 
-  var verifying = false;
-  function verifyCode() {
-    if (verifying) return;
-    var code = otpValue();
-    if (code.length < Auth.CODE_LEN) { toast('کد ۵ رقمی را کامل وارد کنید', 'err'); return; }
+  var authBusy = false;
 
-    verifying = true;
-    var btn = $('#btn-verify-code');
+  function doSignup() {
+    if (authBusy) return;
+    var u = $('#in-reg-user').value.trim();
+    var p = $('#in-reg-pass').value;
+    var p2 = $('#in-reg-pass2').value;
+
+    var problem = Auth.usernameProblem(u) || Auth.passwordProblem(p);
+    if (problem) return toast(problem, 'err', 2600);
+    if (p !== p2) return toast('دو رمز یکی نیستند', 'err');
+
+    authBusy = true;
+    var btn = $('#btn-do-signup');
+    btn.disabled = true; btn.textContent = 'در حال ساخت…';
+
+    Auth.register(u, p, { name: S.get().name || u, avatar: S.get().avatar }).then(function (r) {
+      authBusy = false;
+      btn.disabled = false; btn.textContent = 'ساخت حساب';
+      if (!r.ok) { toast(r.message || 'ثبت‌نام نشد', 'err', 3000); vibrate([30, 50, 30]); return; }
+
+      SFX.coin();
+      /* کد بازیابی فقط همین یک بار می‌آید — قبل از هر چیز نشانش می‌دهیم */
+      if (r.recovery) {
+        pendingRecovery = r.recovery;
+        $('#recovery-code').textContent = r.recovery;
+        $('#chk-saved-recovery').checked = false;
+        $('#btn-recovery-done').disabled = true;
+        afterAuth(r, 'screen-recovery-show');
+      } else {
+        afterAuth(r);
+      }
+    });
+  }
+
+  function doLogin() {
+    if (authBusy) return;
+    var u = $('#in-login-user').value.trim();
+    var p = $('#in-login-pass').value;
+    if (!u || !p) return toast('نام کاربری و رمز را وارد کنید', 'err');
+
+    authBusy = true;
+    var btn = $('#btn-do-login');
+    btn.disabled = true; btn.textContent = 'در حال ورود…';
+
+    Auth.login(u, p).then(function (r) {
+      authBusy = false;
+      btn.disabled = false; btn.textContent = 'ورود';
+      if (!r.ok) { toast(r.message || 'ورود نشد', 'err', 3000); vibrate([30, 50, 30]); return; }
+      $('#in-login-pass').value = '';
+      toast('خوش آمدید 👋', 'ok');
+      afterAuth(r);
+    });
+  }
+
+  function doRecover() {
+    if (authBusy) return;
+    var u = $('#in-rec-user').value.trim();
+    var c = $('#in-rec-code').value;
+    var p = $('#in-rec-pass').value;
+
+    authBusy = true;
+    var btn = $('#btn-do-recover');
     btn.disabled = true; btn.textContent = 'در حال بررسی…';
 
-    Auth.verifyCode(authPhone, code).then(function (r) {
-      verifying = false;
-      btn.disabled = false; btn.textContent = 'تأیید و ادامه';
-      if (!r.ok) {
-        toast(r.message || 'کد درست نیست', 'err', 2400);
-        clearOtp();
-        var b = $$('.otp-box')[0]; if (b) b.focus();
-        vibrate([30, 50, 30]);
-        return;
-      }
-      clearInterval(resendTimer);
-      P.phone = authPhone;
-      P.verified = true;
-      P.authToken = r.token || null;
-      if (r.userId) P.id = r.userId;
-      S.save();
-      SFX.coin();
-      toast('شماره تأیید شد ✅', 'ok');
+    Auth.recover(u, c, p).then(function (r) {
+      authBusy = false;
+      btn.disabled = false; btn.textContent = 'بازیابی حساب';
+      if (!r.ok) { toast(r.message || 'بازیابی نشد', 'err', 3000); vibrate([30, 50, 30]); return; }
 
-      // توکن نشست را نگه می‌داریم تا کیف پول از سرور بیاید
-      if (r.token && r.mode === 'server') {
-        window.API.setToken(r.token);
-        window.API.online = true;
-        window.API.me().then(function (d) {
-          if (d.ok && d.profile) { S.applyServerProfile(d.profile); refreshWallet(); }
-          go(S.get().name ? 'screen-home' : 'screen-login', true);
-        });
-        return;
+      $('#in-rec-pass').value = ''; $('#in-rec-code').value = '';
+      toast('حساب بازیابی شد ✅', 'ok');
+      // کد تازه — کد قبلی دیگر کار نمی‌کند، پس باید ببیندش
+      if (r.recovery) {
+        $('#recovery-code').textContent = r.recovery;
+        $('#chk-saved-recovery').checked = false;
+        $('#btn-recovery-done').disabled = true;
+        afterAuth(r, 'screen-recovery-show');
+      } else {
+        afterAuth(r);
       }
-      go(P.name ? 'screen-home' : 'screen-login', true);
     });
   }
 
@@ -1337,14 +1404,16 @@
     session.on('timer', function () { paintClock(); });
 
     session.on('timeout', function (d) {
+      var left = typeof d.left === 'number' ? d.left : Math.max(0, (d.max || 2) - (d.auto || 1));
       if (d.player === G.me) {
-        var left = d.max - d.strikes;
         toast(left > 0
-          ? 'وقتت تمام شد! سیستم به‌جای تو بازی کرد — ' + fa(left) + ' فرصت دیگر داری'
-          : 'وقتت تمام شد', 'err', 2600);
+          ? 'وقتت تمام شد! سیستم به‌جای تو بازی کرد — ' + fa(left) + ' نوبت دیگر فرصت داری'
+          : 'وقتت تمام شد — نوبت بعدی بازی را می‌بازی', 'err', 3000);
         vibrate([40, 60, 40]);
       } else {
-        toast('وقت حریف تمام شد', null, 1800);
+        toast(d.away
+          ? 'حریف قطع است — سیستم به‌جایش بازی کرد'
+          : 'وقت حریف تمام شد — سیستم به‌جایش بازی کرد', null, 2200);
       }
     });
 
@@ -1366,8 +1435,10 @@
       }
     });
     session.on('oppDisconnected', function (d) {
+      /* بازی متوقف نمی‌شود — سیستم به‌جای حریف بازی می‌کند.
+       * پس ساعت نوبت باید بچرخد، وگرنه کاربر فکر می‌کند بازی قفل شده. */
       showConn('opp', Date.now() + (d.graceMs || 45000), d.name);
-      stopTurnClock();
+      toast('حریف قطع شد — سیستم تا ' + fa(d.autoRounds || 2) + ' نوبت به‌جایش بازی می‌کند', null, 3000);
     });
     session.on('oppReconnected', function () {
       hideConn();
@@ -1554,123 +1625,406 @@
    *  فروشگاه
    * ===================================================================== */
 
+  /* =====================================================================
+   *  کیف پول تتری
+   *
+   *  همه‌ی مبالغ از سرور به «میکرو-تتر» (عدد صحیح) می‌آیند و فقط
+   *  همین‌جا برای نمایش به اعشار تبدیل می‌شوند.
+   * ===================================================================== */
+
+  var USDT = 1000000;
+  var walletData = null;
+
+  function usdt(micro) { return (Math.round(Number(micro) || 0) / USDT).toFixed(2); }
+
+  /* ⚠️ عمداً از toLocaleString استفاده نمی‌کنیم:
+   * برای ۵٫۰۰ خروجی «۵» می‌دهد و صفرهای اعشار را می‌اندازد.
+   * برای پول، «۵» و «۵٫۰۰» یکی نیستند — همیشه دو رقم اعشار نشان می‌دهیم. */
+  function faDigits(str) {
+    return String(str).replace(/\d/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'[+d]; });
+  }
+  function faUsdt(micro) {
+    var v = usdt(micro);                     // مثل "1234.50"
+    var parts = v.split('.');
+    var whole = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '٬');
+    return faDigits(whole) + '٫' + faDigits(parts[1]);
+  }
+  function toMicro(v) { return Math.round((parseFloat(String(v).replace(/[^\d.]/g, '')) || 0) * USDT); }
+
+  function intVal(sel) {
+    var el2 = $(sel);
+    return el2 ? (parseInt(String(el2.value).replace(/\D/g, ''), 10) || 0) : 0;
+  }
+
   function buildShop() {
-    var buy = $('#shop-buy');
-    buy.innerHTML = '';
-    S.COIN_PACKS.forEach(function (pk) {
-      var total = S.packTotal(pk);
-      var d = el('div', 'pack' + (pk.tag === 'محبوب‌ترین' ? ' best' : ''));
-      d.innerHTML =
-        (pk.tag ? '<div class="ribbon">' + pk.tag + '</div>' : '') +
-        '<div class="p-ic">' + pk.icon + '</div>' +
-        '<div class="p-body">' +
-          '<div class="p-coins">' + fa(total) + ' سکه</div>' +
-          (pk.bonus ? '<div class="p-bonus">' + fa(pk.coins) + ' + ' + fa(pk.bonus) + '٪ هدیه</div>' : '<div class="p-bonus">&nbsp;</div>') +
-        '</div>' +
-        '<div class="p-price">' + fa(pk.price) + ' تومان</div>';
-      d.onclick = function () { purchaseFlow(pk); };
-      buy.appendChild(d);
+    var tabs = $$('#wallet-tabs .tab');
+    tabs.forEach(function (t) {
+      t.onclick = function () {
+        SFX.tap();
+        tabs.forEach(function (x) { x.classList.toggle('active', x === t); });
+        ['buy', 'sell', 'deposit', 'withdraw'].forEach(function (name) {
+          $('#pane-' + name).style.display = (name === t.dataset.tab) ? '' : 'none';
+        });
+      };
+    });
+    refreshWalletScreen();
+  }
+
+  /** کیف پول را از سرور می‌گیرد و هر چهار تب را از نو می‌سازد */
+  function refreshWalletScreen() {
+    if (!S.isOnline()) {
+      var msg = '<div class="card"><h3>کیف پول</h3><div class="muted">' +
+        'برای خرید و فروش سکه باید وارد حساب شوید.</div></div>';
+      ['buy', 'sell', 'deposit', 'withdraw'].forEach(function (n) { $('#pane-' + n).innerHTML = msg; });
+      $('#bal-usdt').innerHTML = '—';
+      return;
+    }
+
+    window.API.wallet().then(function (d) {
+      if (!d || !d.ok) { toast((d && d.message) || 'کیف پول خوانده نشد', 'err'); return; }
+      walletData = d;
+      $('#bal-usdt').innerHTML = faUsdt(d.balance) + ' <span>USDT</span>';
+      paneBuy(d); paneSell(d); paneDeposit(d); paneWithdraw(d);
+    });
+  }
+
+  /* ------------------------------------------------------- تب خرید */
+
+  function paneBuy(w) {
+    var rate = w.rates.buy;                       // میکرو-تتر برای هر سکه
+    var perUsdt = Math.floor(USDT / rate);        // چند سکه برای ۱ تتر
+
+    var html =
+      '<div class="warn-box">نرخ امروز: با <b>۱ تتر</b> می‌توانید <b>' + fa(perUsdt) + ' سکه</b> بخرید.</div>';
+
+    (S.COIN_PACKS || []).forEach(function (pk) {
+      var total = pk.total || S.packTotal(pk);
+      var cost = pk.cost != null ? pk.cost : pk.coins * rate;
+      html +=
+        '<div class="pack' + (pk.tag === 'محبوب‌ترین' ? ' best' : '') + '" data-pack="' + pk.id + '">' +
+          (pk.tag ? '<div class="ribbon">' + pk.tag + '</div>' : '') +
+          '<div class="p-ic">' + pk.icon + '</div>' +
+          '<div class="p-body">' +
+            '<div class="p-coins">' + fa(total) + ' سکه</div>' +
+            (pk.bonus
+              ? '<div class="p-bonus">' + fa(pk.coins) + ' + ' + fa(pk.bonus) + '٪ هدیه</div>'
+              : '<div class="p-bonus">&nbsp;</div>') +
+          '</div>' +
+          '<div class="p-price">' + faUsdt(cost) + ' USDT</div>' +
+        '</div>';
     });
 
-    var sell = $('#shop-sell');
-    var rate = S.CONFIG.SELL_RATE;
-    sell.innerHTML =
-      '<div class="card">' +
-        '<h3>فروش سکه</h3>' +
-        '<div class="muted" style="margin-bottom:12px">' +
-          'نرخ فعلی: هر <b>' + fa(rate) + ' سکه</b> = <b>۱٬۰۰۰ تومان</b><br>' +
-          'حداقل مقدار فروش: <b>' + fa(S.CONFIG.SELL_MIN) + ' سکه</b><br>' +
-          'پس از ثبت درخواست، مبلغ ظرف ۲۴ تا ۷۲ ساعت کاری واریز می‌شود.' +
-        '</div>' +
-        '<label class="fld"><span>مقدار سکه</span>' +
-          '<input class="input" id="sell-amount" type="tel" inputmode="numeric" placeholder="' + S.CONFIG.SELL_MIN + '" style="direction:ltr;text-align:left"></label>' +
-        '<label class="fld"><span>شماره کارت یا شبا</span>' +
-          '<input class="input" id="sell-dest" placeholder="6037-XXXX-XXXX-XXXX" style="direction:ltr;text-align:left"></label>' +
+    html +=
+      '<div class="card" style="margin-top:14px">' +
+        '<h3>مقدار دلخواه</h3>' +
+        '<label class="fld"><span>چند سکه می‌خواهید؟</span>' +
+          '<input class="input" id="buy-amount" type="tel" inputmode="numeric" ' +
+          'placeholder="' + w.rates.buyMin + '" style="direction:ltr;text-align:left"></label>' +
         '<div class="card" style="margin:0 0 12px;background:#0d1526">' +
-          '<div style="display:flex;justify-content:space-between"><span class="muted">مبلغ قابل دریافت</span>' +
-          '<b id="sell-preview" style="color:var(--green)">۰ تومان</b></div>' +
+          '<div style="display:flex;justify-content:space-between">' +
+            '<span class="muted">هزینه</span><b id="buy-preview" style="color:var(--gold)">۰٫۰۰ USDT</b>' +
+          '</div>' +
         '</div>' +
-        '<button class="btn green" id="btn-sell">ثبت درخواست فروش</button>' +
+        '<button class="btn primary" id="btn-buy-custom">خرید سکه</button>' +
       '</div>';
 
-    var amt = $('#sell-amount');
-    amt.oninput = function () {
-      var v = parseInt(amt.value.replace(/\D/g, ''), 10) || 0;
-      $('#sell-preview').textContent = fa(Math.floor(v / rate) * 1000) + ' تومان';
-    };
-    $('#btn-sell').onclick = function () {
-      var v = parseInt(($('#sell-amount').value || '').replace(/\D/g, ''), 10) || 0;
-      var dest = $('#sell-dest').value.trim();
-      if (!dest || dest.replace(/\D/g, '').length < 16) { toast('شماره کارت یا شبا را درست وارد کنید', 'err'); return; }
-      doAction(function () { return window.API.sell(v, dest); }, function () { return S.sellCoins(v, dest); })
-        .then(function (r) {
-      if (!r || !r.ok) { toast((r && (r.message || r.reason)) || 'ثبت نشد', 'err'); return; }
-      $('#sell-amount').value = ''; $('#sell-preview').textContent = '۰ تومان';
-      modal('<div class="m-ic">✅</div><h2>درخواست ثبت شد</h2>' +
-        '<p>مبلغ <b style="color:var(--green)">' + fa(r.toman) + ' تومان</b> پس از بررسی به حساب شما واریز می‌شود.<br>' +
-        'وضعیت درخواست را در بخش جایزه‌ها می‌بینید.</p>' +
-        '<button class="btn primary" onclick="document.getElementById(\'modal-bg\').classList.remove(\'show\')">باشه</button>');
-        });
-    };
+    var pane = $('#pane-buy');
+    pane.innerHTML = html;
 
-    $('#tab-buy').onclick = function () {
-      $('#tab-buy').className = 'btn primary sm'; $('#tab-sell').className = 'btn ghost sm';
-      $('#shop-buy').style.display = ''; $('#shop-sell').style.display = 'none';
+    $$('.pack', pane).forEach(function (card) {
+      card.onclick = function () {
+        var pk = (S.COIN_PACKS || []).filter(function (x) { return x.id === card.dataset.pack; })[0];
+        if (pk) buyPackFlow(pk, w);
+      };
+    });
+
+    $('#buy-amount').oninput = function () {
+      $('#buy-preview').textContent = faUsdt(intVal('#buy-amount') * rate) + ' USDT';
     };
-    $('#tab-sell').onclick = function () {
-      $('#tab-sell').className = 'btn primary sm'; $('#tab-buy').className = 'btn ghost sm';
-      $('#shop-sell').style.display = ''; $('#shop-buy').style.display = 'none';
+    $('#btn-buy-custom').onclick = function () {
+      var coins = intVal('#buy-amount');
+      if (coins < w.rates.buyMin) return toast('حداقل خرید ' + fa(w.rates.buyMin) + ' سکه است', 'err');
+      if (coins * rate > w.balance) return toast('بالانس کافی نیست', 'err');
+      doBuy(coins, null);
     };
   }
 
-  /**
-   * جریان خرید — اینجا باید درگاه پرداخت واقعی وصل شود.
-   * فایل payment.js را ببینید.
-   */
-  function purchaseFlow(pack) {
-    var total = S.packTotal(pack);
+  function buyPackFlow(pk, w) {
+    var total = pk.total || S.packTotal(pk);
+    var cost = pk.cost != null ? pk.cost : pk.coins * w.rates.buy;
     var m = modal(
-      '<div class="m-ic">' + pack.icon + '</div><h2>خرید ' + fa(total) + ' سکه</h2>' +
-      '<p>مبلغ قابل پرداخت: <b style="color:var(--gold)">' + fa(pack.price) + ' تومان</b></p>' +
+      '<div class="m-ic">' + pk.icon + '</div><h2>خرید ' + fa(total) + ' سکه</h2>' +
       '<div class="result-lines">' +
-        '<div><span>سکه‌ی پایه</span><span>' + fa(pack.coins) + '</span></div>' +
-        (pack.bonus ? '<div><span>هدیه (' + fa(pack.bonus) + '٪)</span><span style="color:var(--green)">+' + fa(total - pack.coins) + '</span></div>' : '') +
-        '<div><span>مجموع</span><span style="color:var(--gold)">' + fa(total) + ' 🪙</span></div>' +
+        '<div><span>سکه‌ی پایه</span><span>' + fa(pk.coins) + '</span></div>' +
+        (pk.bonus ? '<div><span>هدیه (' + fa(pk.bonus) + '٪)</span><span style="color:var(--green)">+' + fa(total - pk.coins) + '</span></div>' : '') +
+        '<div><span>هزینه</span><span style="color:var(--gold)">' + faUsdt(cost) + ' USDT</span></div>' +
+        '<div><span>بالانس بعد از خرید</span><span>' + faUsdt(w.balance - cost) + ' USDT</span></div>' +
       '</div>' +
+      (cost > w.balance ? '<div class="warn-box" style="margin-top:10px">بالانس کافی نیست — اول از تب «شارژ» حساب را شارژ کنید.</div>' : '') +
       '<div class="row"><button class="btn ghost" id="pf-no">انصراف</button>' +
-      '<button class="btn primary" id="pf-yes">پرداخت</button></div>' +
-      '<div class="muted" style="margin-top:10px;font-size:11px;text-align:center">' +
-      'حالت نمایشی — برای پرداخت واقعی، درگاه را در payment.js وصل کنید.</div>'
+      '<button class="btn primary" id="pf-yes"' + (cost > w.balance ? ' disabled' : '') + '>خرید</button></div>'
     );
     $('#pf-no', m).onclick = closeModal;
-    $('#pf-yes', m).onclick = function () {
-      closeModal();
-      toast('در حال اتصال به درگاه…');
+    $('#pf-yes', m).onclick = function () { closeModal(); doBuy(null, pk.id); };
+  }
 
-      // آنلاین: سرور تراکنش می‌سازد و بعد از پرداخت سکه را واریز می‌کند
-      var pay = S.isOnline()
-        ? window.API.buyPack(pack.id).then(function (d) {
-            if (!d.ok) return { ok: false, message: d.message };
-            return window.API.completePurchase(d.purchaseId).then(function (c) {
-              if (c.profile) S.applyServerProfile(c.profile);
-              return c.ok ? { ok: true, refId: 'SRV' + String(d.purchaseId).slice(-8).toUpperCase(), server: true }
-                          : { ok: false, message: c.message };
-            });
-          })
-        : (window.Payment && window.Payment.purchase
-            ? window.Payment.purchase(pack)
-            : Promise.resolve({ ok: true, refId: 'DEMO' + Date.now().toString(36).toUpperCase() }));
+  function doBuy(coins, packId) {
+    window.API.buyCoins(packId || coins).then(function (r) {
+      if (!r || !r.ok) { toast((r && r.message) || 'خرید نشد', 'err', 2800); return; }
+      if (r.profile) S.applyServerProfile(r.profile);
+      SFX.coin(); refreshWallet(); refreshWalletScreen();
+      var bonus = r.bonus ? '<div><span>هدیه</span><span style="color:var(--green)">+' + fa(r.bonus) + '</span></div>' : '';
+      modal('<div class="m-ic">🎉</div><h2>سکه‌ها اضافه شد</h2>' +
+        '<div class="result-amount win">+' + fa(r.coins) + ' 🪙</div>' +
+        '<div class="result-lines">' + bonus +
+        '<div><span>پرداختی</span><span>' + faUsdt(r.cost) + ' USDT</span></div></div>' +
+        '<button class="btn primary" id="ps-ok">عالی</button>');
+      $('#ps-ok').onclick = closeModal;
+    });
+  }
 
-      pay.then(function (res) {
-        if (!res || !res.ok) { toast(res && res.message ? res.message : 'پرداخت ناموفق بود', 'err'); return; }
-        if (!res.server) S.completePurchase(pack, res.refId);
-        SFX.coin(); refreshWallet();
-        modal('<div class="m-ic">🎉</div><h2>پرداخت موفق</h2>' +
-          '<div class="result-amount win">+' + fa(total) + ' 🪙</div>' +
-          '<p>کد پیگیری: <span style="direction:ltr;display:inline-block">' + esc(res.refId || '-') + '</span></p>' +
-          '<button class="btn primary" id="ps-ok">عالی</button>');
-        $('#ps-ok').onclick = closeModal;
+  /* ------------------------------------------------------- تب فروش */
+
+  function paneSell(w) {
+    var rate = w.rates.sell;
+    var perUsdt = Math.ceil(USDT / rate);
+
+    $('#pane-sell').innerHTML =
+      '<div class="card">' +
+        '<h3>فروش سکه</h3>' +
+        '<div class="muted" style="margin-bottom:12px">' +
+          'نرخ امروز: هر <b>' + fa(perUsdt) + ' سکه</b> = <b>۱ تتر</b><br>' +
+          'حداقل فروش: <b>' + fa(w.rates.sellMin) + ' سکه</b><br>' +
+          'تتر <b>فوری</b> به بالانس شما اضافه می‌شود — بدون انتظار.' +
+        '</div>' +
+        '<label class="fld"><span>مقدار سکه</span>' +
+          '<input class="input" id="sell-amount" type="tel" inputmode="numeric" ' +
+          'placeholder="' + w.rates.sellMin + '" style="direction:ltr;text-align:left"></label>' +
+        '<div class="card" style="margin:0 0 12px;background:#0d1526">' +
+          '<div style="display:flex;justify-content:space-between">' +
+            '<span class="muted">دریافتی</span><b id="sell-preview" style="color:var(--green)">۰٫۰۰ USDT</b>' +
+          '</div>' +
+        '</div>' +
+        '<button class="btn green" id="btn-sell">فروش سکه</button>' +
+      '</div>';
+
+    $('#sell-amount').oninput = function () {
+      $('#sell-preview').textContent = faUsdt(intVal('#sell-amount') * rate) + ' USDT';
+    };
+    $('#btn-sell').onclick = function () {
+      var coins = intVal('#sell-amount');
+      if (coins < w.rates.sellMin) return toast('حداقل فروش ' + fa(w.rates.sellMin) + ' سکه است', 'err');
+      if (coins > S.get().coins) return toast('این‌قدر سکه ندارید', 'err');
+
+      confirmDialog('فروش سکه',
+        fa(coins) + ' سکه می‌فروشید و <b>' + faUsdt(coins * rate) + ' تتر</b> می‌گیرید.<br>مطمئنید؟',
+        'بله، بفروش', function () {
+          window.API.sellCoins(coins).then(function (r) {
+            if (!r || !r.ok) { toast((r && r.message) || 'فروش نشد', 'err'); return; }
+            if (r.profile) S.applyServerProfile(r.profile);
+            SFX.coin(); refreshWallet(); refreshWalletScreen();
+            toast('فروخته شد — ' + faUsdt(r.gain) + ' تتر به بالانس اضافه شد', 'ok', 3000);
+          });
+        });
+    };
+  }
+
+  /* ------------------------------------------------------- تب شارژ */
+
+  function paneDeposit(w) {
+    var addr = w.addresses || {};
+    var hasAddr = addr.TRC20 || addr.BEP20;
+
+    var netOptions = '';
+    if (addr.TRC20) netOptions += '<option value="TRC20">TRC20 (ترون)</option>';
+    if (addr.BEP20) netOptions += '<option value="BEP20">BEP20 (بایننس اسمارت چین)</option>';
+
+    var html =
+      '<div class="card">' +
+        '<h3>کد وچر</h3>' +
+        '<div class="muted" style="margin-bottom:10px">اگر کد وچر دارید، همین‌جا وارد کنید — فوری شارژ می‌شود.</div>' +
+        '<label class="fld"><span>کد وچر</span>' +
+          '<input class="input" id="voucher-code" placeholder="XXXX-XXXX-XXXX-XXXX" ' +
+          'style="direction:ltr;text-align:center;letter-spacing:1px;text-transform:uppercase"></label>' +
+        '<button class="btn primary" id="btn-voucher">استفاده از کد</button>' +
+      '</div>';
+
+    if (!hasAddr) {
+      html +=
+        '<div class="card"><h3>واریز تتر</h3>' +
+        '<div class="muted">آدرس واریز هنوز تنظیم نشده است. از پنل مدیریت ' +
+        '<b>DEPOSIT_ADDRESS_TRC20</b> را وارد کنید.</div></div>';
+    } else {
+      html +=
+        '<div class="card">' +
+          '<h3>واریز تتر</h3>' +
+          '<div class="warn-box">' +
+            '⚠️ فقط <b>USDT</b> و فقط روی شبکه‌ی انتخاب‌شده بفرستید.<br>' +
+            'ارسال ارز دیگر یا شبکه‌ی اشتباه یعنی <b>از دست رفتن دائمی پول</b>.' +
+          '</div>' +
+          '<label class="fld"><span>شبکه</span>' +
+            '<select class="input" id="dep-network" style="direction:ltr">' + netOptions + '</select></label>' +
+          '<div class="muted" style="margin-bottom:2px">آدرس واریز:</div>' +
+          '<div class="addr-box" id="dep-address">' + esc(addr.TRC20 || addr.BEP20) + '</div>' +
+          '<button class="btn" id="btn-copy-addr" style="margin-bottom:14px">📋 کپی آدرس</button>' +
+          '<div class="muted" style="margin-bottom:10px">' +
+            'بعد از واریز، مبلغ و شناسه‌ی تراکنش (TXID) را اینجا ثبت کنید. ' +
+            'حداقل واریز <b>' + faUsdt(w.rates.depositMin) + ' تتر</b> است.' +
+          '</div>' +
+          '<label class="fld"><span>مبلغ واریزی (تتر)</span>' +
+            '<input class="input" id="dep-amount" type="tel" inputmode="decimal" placeholder="10.00" ' +
+            'style="direction:ltr;text-align:left"></label>' +
+          '<label class="fld"><span>شناسه تراکنش (TXID)</span>' +
+            '<input class="input" id="dep-txid" placeholder="شناسه تراکنش از کیف پول یا صرافی" ' +
+            'style="direction:ltr;text-align:left"></label>' +
+          '<button class="btn primary" id="btn-deposit">ثبت واریز</button>' +
+        '</div>';
+    }
+
+    // تاریخچه‌ی واریزها
+    if (w.deposits && w.deposits.length) {
+      html += '<div class="card"><h3>واریزهای شما</h3>';
+      w.deposits.forEach(function (d) {
+        html +=
+          '<div class="tx-row">' +
+            '<div class="tx-main">' +
+              '<div class="tx-title">' + faUsdt(d.status === 'approved' ? d.credited : d.amount) + ' USDT</div>' +
+              '<div class="tx-sub">' + esc(d.network) + ' · ' + esc(String(d.txid).slice(0, 18)) + '…</div>' +
+            '</div>' +
+            '<span class="pill ' + d.status + '">' + statusText(d.status) + '</span>' +
+          '</div>' +
+          (d.note ? '<div class="muted" style="margin:-4px 0 10px 4px;font-size:11.5px">' + esc(d.note) + '</div>' : '');
       });
+      html += '</div>';
+    }
+
+    var pane = $('#pane-deposit');
+    pane.innerHTML = html;
+
+    $('#btn-voucher').onclick = function () {
+      var code = $('#voucher-code').value.trim();
+      if (!code) return toast('کد وچر را وارد کنید', 'err');
+      window.API.voucher(code).then(function (r) {
+        if (!r || !r.ok) { toast((r && r.message) || 'کد کار نکرد', 'err', 2800); return; }
+        if (r.profile) S.applyServerProfile(r.profile);
+        $('#voucher-code').value = '';
+        SFX.coin(); refreshWallet(); refreshWalletScreen();
+        toast(faUsdt(r.amount) + ' تتر به بالانس اضافه شد ✅', 'ok', 3000);
+      });
+    };
+
+    if (!hasAddr) return;
+
+    $('#dep-network').onchange = function () {
+      $('#dep-address').textContent = addr[this.value] || '';
+    };
+    $('#btn-copy-addr').onclick = function () {
+      copyText($('#dep-address').textContent.trim(), 'آدرس کپی شد');
+    };
+    $('#btn-deposit').onclick = function () {
+      var micro = toMicro($('#dep-amount').value);
+      var txid = $('#dep-txid').value.trim();
+      if (micro < w.rates.depositMin) return toast('حداقل واریز ' + faUsdt(w.rates.depositMin) + ' تتر است', 'err');
+      if (txid.length < 32) return toast('شناسه تراکنش (TXID) درست نیست', 'err');
+
+      window.API.deposit(micro, txid, $('#dep-network').value).then(function (r) {
+        if (!r || !r.ok) { toast((r && r.message) || 'ثبت نشد', 'err', 2800); return; }
+        $('#dep-amount').value = ''; $('#dep-txid').value = '';
+        refreshWalletScreen();
+        modal('<div class="m-ic">⏳</div><h2>واریز ثبت شد</h2>' +
+          '<p>بعد از بررسی، <b style="color:var(--green)">' + faUsdt(micro) + ' تتر</b> به بالانس شما اضافه می‌شود.<br>' +
+          'کد پیگیری: <span style="direction:ltr;display:inline-block">' + esc(r.id) + '</span></p>' +
+          '<button class="btn primary" id="dp-ok">باشه</button>');
+        $('#dp-ok').onclick = closeModal;
+      });
+    };
+  }
+
+  function statusText(s2) {
+    return s2 === 'pending' ? 'در انتظار'
+         : s2 === 'approved' ? 'تأیید شد'
+         : s2 === 'paid' ? 'پرداخت شد'
+         : s2 === 'rejected' ? 'رد شد' : s2;
+  }
+
+  /* ----------------------------------------------------- تب برداشت */
+
+  function paneWithdraw(w) {
+    var html =
+      '<div class="card">' +
+        '<h3>برداشت تتر</h3>' +
+        '<div class="muted" style="margin-bottom:10px">' +
+          'حداقل برداشت: <b>' + faUsdt(w.rates.withdrawMin) + ' تتر</b><br>' +
+          'کارمزد شبکه: <b>' + faUsdt(w.rates.withdrawFee) + ' تتر</b><br>' +
+          'بعد از بررسی (معمولاً کمتر از ۲۴ ساعت) به آدرس شما واریز می‌شود.' +
+        '</div>' +
+        '<div class="warn-box">آدرس را با دقت وارد کنید. تتر ارسال‌شده به آدرس اشتباه برگشت‌پذیر نیست.</div>' +
+        '<label class="fld"><span>شبکه</span>' +
+          '<select class="input" id="wd-network" style="direction:ltr">' +
+            '<option value="TRC20">TRC20 (ترون)</option>' +
+            '<option value="BEP20">BEP20 (بایننس اسمارت چین)</option>' +
+          '</select></label>' +
+        '<label class="fld"><span>مبلغ (تتر)</span>' +
+          '<input class="input" id="wd-amount" type="tel" inputmode="decimal" ' +
+          'placeholder="' + usdt(w.rates.withdrawMin) + '" style="direction:ltr;text-align:left"></label>' +
+        '<label class="fld"><span>آدرس کیف پول</span>' +
+          '<input class="input" id="wd-address" placeholder="T..." style="direction:ltr;text-align:left"></label>' +
+        '<div class="card" style="margin:0 0 12px;background:#0d1526">' +
+          '<div style="display:flex;justify-content:space-between">' +
+            '<span class="muted">دریافتی خالص</span><b id="wd-preview" style="color:var(--green)">۰٫۰۰ USDT</b>' +
+          '</div>' +
+        '</div>' +
+        '<button class="btn green" id="btn-withdraw">ثبت درخواست برداشت</button>' +
+      '</div>';
+
+    if (w.withdrawals && w.withdrawals.length) {
+      html += '<div class="card"><h3>برداشت‌های شما</h3>';
+      w.withdrawals.forEach(function (x) {
+        html +=
+          '<div class="tx-row">' +
+            '<div class="tx-main">' +
+              '<div class="tx-title">' + faUsdt(x.payout) + ' USDT</div>' +
+              '<div class="tx-sub">' + esc(x.network) + ' · ' + esc(String(x.address).slice(0, 14)) + '…</div>' +
+            '</div>' +
+            '<span class="pill ' + x.status + '">' + statusText(x.status) + '</span>' +
+          '</div>' +
+          (x.note ? '<div class="muted" style="margin:-4px 0 10px 4px;font-size:11.5px">' + esc(x.note) + '</div>' : '');
+      });
+      html += '</div>';
+    }
+
+    var pane = $('#pane-withdraw');
+    pane.innerHTML = html;
+
+    function preview() {
+      var micro = toMicro($('#wd-amount').value);
+      var net = Math.max(0, micro - w.rates.withdrawFee);
+      $('#wd-preview').textContent = faUsdt(net) + ' USDT';
+    }
+    $('#wd-amount').oninput = preview;
+
+    $('#btn-withdraw').onclick = function () {
+      var micro = toMicro($('#wd-amount').value);
+      var address = $('#wd-address').value.trim();
+      var net = $('#wd-network').value;
+
+      if (micro < w.rates.withdrawMin) return toast('حداقل برداشت ' + faUsdt(w.rates.withdrawMin) + ' تتر است', 'err');
+      if (micro > w.balance) return toast('بالانس کافی نیست', 'err');
+      if (!address) return toast('آدرس کیف پول را وارد کنید', 'err');
+
+      confirmDialog('برداشت تتر',
+        '<b>' + faUsdt(micro - w.rates.withdrawFee) + ' تتر</b> به این آدرس فرستاده می‌شود:<br>' +
+        '<span style="direction:ltr;display:inline-block;word-break:break-all;font-size:12px">' + esc(address) + '</span><br><br>' +
+        'شبکه: <b>' + esc(net) + '</b> — آدرس را دوباره چک کنید.',
+        'ثبت درخواست', function () {
+          window.API.withdraw(micro, address, net).then(function (r) {
+            if (!r || !r.ok) { toast((r && r.message) || 'ثبت نشد', 'err', 2800); return; }
+            if (r.profile) S.applyServerProfile(r.profile);
+            $('#wd-amount').value = ''; $('#wd-address').value = '';
+            refreshWallet(); refreshWalletScreen();
+            toast('درخواست برداشت ثبت شد', 'ok', 3000);
+          });
+        });
     };
   }
 
@@ -1971,7 +2325,179 @@
       '• انرژی: به ازای هر <b>' + fa(S.CONFIG.ENERGY_PER_COINS) + ' سکه</b> شرط، <b>۱ انرژی</b> (چه برد چه باخت)<br>' +
       '• پاداش مارس: <b>+' + fa(S.CONFIG.ENERGY_MARS_BONUS * 100) + '٪</b> انرژی<br>' +
       '• دعوت دوستان: <b>' + fa(S.CONFIG.REFERRAL_ENERGY) + ' انرژی</b> + <b>' + fa(S.CONFIG.REFERRAL_COINS) + ' سکه</b> برای هر دعوت<br>' +
-      '• نرخ فروش سکه: هر <b>' + fa(S.CONFIG.SELL_RATE) + ' سکه</b> = ۱٬۰۰۰ تومان';
+      '• خرید سکه: هر <b>۱ تتر</b> ≈ <b>' + fa(Math.floor(1000000 / (S.CONFIG.BUY_RATE || 100))) + ' سکه</b><br>' +
+      '• فروش سکه: هر <b>' + fa(Math.ceil(1000000 / (S.CONFIG.SELL_RATE || 80))) + ' سکه</b> = <b>۱ تتر</b>';
+
+    buildAccountCard();
+  }
+
+  /* --------------------------------------------------- کارت حساب */
+
+  function buildAccountCard() {
+    var P2 = S.get();
+    var online = S.isOnline();
+
+    $('#acc-username').textContent = P2.username || (online ? 'مهمان' : '—');
+
+    var tg = $('#acc-telegram');
+    tg.textContent = P2.telegramLinked ? '✓ وصل است' : 'وصل نیست';
+    tg.className = P2.telegramLinked ? '' : 'muted';
+
+    // مهمان اول باید حساب بسازد
+    var isGuest = online && !P2.username;
+    $('#btn-change-pass').style.display = isGuest ? 'none' : '';
+    $('#btn-new-recovery').style.display = isGuest ? 'none' : '';
+    $('#btn-link-telegram').textContent = P2.telegramLinked ? '🔗 مدیریت اتصال تلگرام' : '🔗 وصل کردن به تلگرام';
+
+    if (isGuest) {
+      $('#btn-link-telegram').textContent = '✨ ساخت حساب (تا سکه‌ها نپرند)';
+      $('#btn-link-telegram').onclick = function () { SFX.tap(); go('screen-signup'); };
+    } else {
+      $('#btn-link-telegram').onclick = linkTelegramFlow;
+    }
+
+    $('#btn-change-pass').onclick = changePasswordFlow;
+    $('#btn-new-recovery').onclick = newRecoveryFlow;
+
+    $('#btn-logout').onclick = function () {
+      confirmDialog('خروج از حساب',
+        online && !P2.username
+          ? 'شما حساب مهمان دارید. با خروج، <b>سکه‌ها و جوایزتان از بین می‌رود</b>. مطمئنید؟'
+          : 'از حساب خارج می‌شوید. هر وقت خواستید با نام کاربری و رمز برمی‌گردید.',
+        'خروج', function () {
+          window.API.logout().then(function () {
+            try { localStorage.removeItem('nard_profile_v1'); } catch (e) {}
+            location.reload();
+          });
+        }, 'red');
+    };
+  }
+
+  function changePasswordFlow() {
+    SFX.tap();
+    var m = modal(
+      '<div class="m-ic">🔒</div><h2>تغییر رمز عبور</h2>' +
+      '<label class="fld"><span>رمز فعلی</span>' +
+        '<input class="input" id="cp-old" type="password" style="direction:ltr;text-align:left"></label>' +
+      '<label class="fld"><span>رمز جدید</span>' +
+        '<input class="input" id="cp-new" type="password" placeholder="حداقل ۸ کاراکتر، حرف و عدد" style="direction:ltr;text-align:left"></label>' +
+      '<label class="fld"><span>تکرار رمز جدید</span>' +
+        '<input class="input" id="cp-new2" type="password" style="direction:ltr;text-align:left"></label>' +
+      '<div class="warn-box">با تغییر رمز، از همه‌ی دستگاه‌ها خارج می‌شوید و ' +
+      '<b>کد بازیابی تازه</b> می‌گیرید (کد قبلی باطل می‌شود).</div>' +
+      '<div class="row"><button class="btn ghost" id="cp-no">انصراف</button>' +
+      '<button class="btn primary" id="cp-yes">تغییر رمز</button></div>'
+    );
+    $('#cp-no', m).onclick = closeModal;
+    $('#cp-yes', m).onclick = function () {
+      var o = $('#cp-old').value, n = $('#cp-new').value, n2 = $('#cp-new2').value;
+      var problem = Auth.passwordProblem(n);
+      if (problem) return toast(problem, 'err');
+      if (n !== n2) return toast('دو رمز یکی نیستند', 'err');
+
+      window.API.changePassword(o, n).then(function (r) {
+        if (!r || !r.ok) { toast((r && r.message) || 'تغییر نکرد', 'err', 2800); return; }
+        closeModal();
+        toast('رمز عوض شد — دوباره وارد شوید', 'ok', 3000);
+        setTimeout(function () {
+          try { localStorage.removeItem('nard_profile_v1'); } catch (e) {}
+          window.API.setToken(null);
+          location.reload();
+        }, 1800);
+      });
+    };
+  }
+
+  function newRecoveryFlow() {
+    SFX.tap();
+    var m = modal(
+      '<div class="m-ic">🗝️</div><h2>کد بازیابی تازه</h2>' +
+      '<p>کد بازیابی فعلی شما باطل می‌شود و یک کد تازه می‌گیرید.</p>' +
+      '<label class="fld"><span>رمز عبور</span>' +
+        '<input class="input" id="nr-pass" type="password" style="direction:ltr;text-align:left"></label>' +
+      '<div class="row"><button class="btn ghost" id="nr-no">انصراف</button>' +
+      '<button class="btn primary" id="nr-yes">ساخت کد</button></div>'
+    );
+    $('#nr-no', m).onclick = closeModal;
+    $('#nr-yes', m).onclick = function () {
+      window.API.newRecovery($('#nr-pass').value).then(function (r) {
+        if (!r || !r.ok) { toast((r && r.message) || 'انجام نشد', 'err', 2800); return; }
+        closeModal();
+        $('#recovery-code').textContent = r.recovery;
+        $('#chk-saved-recovery').checked = false;
+        $('#btn-recovery-done').disabled = true;
+        go('screen-recovery-show');
+      });
+    };
+  }
+
+  /**
+   * وصل کردن حساب وب و تلگرام.
+   *
+   * کاربر روی یک طرف کد ۶ رقمی می‌گیرد و در طرف دیگر واردش می‌کند.
+   * حسابی که نام کاربری دارد می‌ماند و آن یکی در آن ادغام می‌شود —
+   * سکه‌ها، انرژی، بالانس و پوسته‌ها همه منتقل می‌شوند.
+   */
+  function linkTelegramFlow() {
+    SFX.tap();
+    var P2 = S.get();
+
+    if (P2.telegramLinked) {
+      var m2 = modal(
+        '<div class="m-ic">🔗</div><h2>تلگرام وصل است</h2>' +
+        '<p>می‌توانید از مینی‌اپ تلگرام هم با همین حساب وارد شوید.</p>' +
+        '<div class="row"><button class="btn ghost" id="lt-close">بستن</button>' +
+        '<button class="btn red" id="lt-unlink">جدا کردن</button></div>'
+      );
+      $('#lt-close', m2).onclick = closeModal;
+      $('#lt-unlink', m2).onclick = function () {
+        window.API.unlinkTelegram().then(function (r) {
+          if (!r || !r.ok) { toast((r && r.message) || 'جدا نشد', 'err'); return; }
+          if (r.profile) S.applyServerProfile(r.profile);
+          closeModal(); buildAccountCard();
+          toast('تلگرام جدا شد', 'ok');
+        });
+      };
+      return;
+    }
+
+    var m = modal(
+      '<div class="m-ic">🔗</div><h2>وصل کردن به تلگرام</h2>' +
+      '<p class="muted" style="text-align:start;line-height:1.9">' +
+        '<b>۱.</b> این کد را کپی کنید<br>' +
+        '<b>۲.</b> بازی را در تلگرام باز کنید<br>' +
+        '<b>۳.</b> آنجا از تنظیمات، «وصل کردن حساب» را بزنید و کد را وارد کنید' +
+      '</p>' +
+      '<div class="recovery-box" id="lt-code">…</div>' +
+      '<div class="muted" style="text-align:center;font-size:11.5px" id="lt-exp">کد تا ۱۰ دقیقه معتبر است</div>' +
+      '<button class="btn" id="lt-copy" style="margin:10px 0">📋 کپی کد</button>' +
+      '<div class="muted" style="margin:14px 0 6px">یا اگر کد را از طرف دیگر گرفته‌اید:</div>' +
+      '<label class="fld"><span>کد اتصال</span>' +
+        '<input class="input" id="lt-input" type="tel" inputmode="numeric" maxlength="6" ' +
+        'placeholder="۶ رقم" style="direction:ltr;text-align:center;letter-spacing:6px"></label>' +
+      '<div class="row"><button class="btn ghost" id="lt-no">بستن</button>' +
+      '<button class="btn primary" id="lt-join">وصل کن</button></div>'
+    );
+
+    window.API.linkCode().then(function (r) {
+      if (r && r.ok) $('#lt-code').textContent = r.code;
+      else $('#lt-code').textContent = '—';
+    });
+
+    $('#lt-copy', m).onclick = function () { copyText($('#lt-code').textContent.trim(), 'کد کپی شد'); };
+    $('#lt-no', m).onclick = closeModal;
+    $('#lt-join', m).onclick = function () {
+      var code = $('#lt-input').value.replace(/\D/g, '');
+      if (code.length !== 6) return toast('کد ۶ رقمی را وارد کنید', 'err');
+      window.API.linkWith(code).then(function (r) {
+        if (!r || !r.ok) { toast((r && r.message) || 'وصل نشد', 'err', 2800); return; }
+        closeModal();
+        window.API.me().then(function (d) {
+          if (d.ok && d.profile) { S.applyServerProfile(d.profile); refreshWallet(); buildAccountCard(); }
+          toast('حساب‌ها وصل شدند ✅', 'ok', 3000);
+        });
+      });
+    };
   }
 
   $('#btn-save-server').onclick = function () {

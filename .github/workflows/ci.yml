@@ -87,7 +87,109 @@ jobs:
           console.log('سکه:', sum, '+ فی:', rake, '=', sum + rake);
           if (sum + rake !== 20000) { console.log('✗ سکه گم شد یا ساخته شد'); process.exit(1); }
           if (D.wallet(a.id, { coins: -99999999, type: 'stake' }).ok) { console.log('✗ موجودی منفی شد'); process.exit(1); }
-          console.log('✓ اقتصاد سالم است');
+          console.log('✓ اقتصاد سکه‌ای سالم است');
+          "
+
+      - name: تست ورود — نام کاربری و رمز و کد بازیابی
+        run: |
+          node -e "
+          process.env.NARD_DATA = '/tmp/citest2';
+          const D = require('./server/db.js');
+
+          const r = D.register({ username: 'Ali_Test', password: 'secret123' });
+          if (!r.ok) throw new Error('ثبت‌نام نشد: ' + r.reason);
+          if (!r.recovery) throw new Error('کد بازیابی برنگشت');
+
+          // نام کاربری بی‌توجه به بزرگی و کوچکی حروف یکتاست
+          if (D.register({ username: 'ALI_TEST', password: 'secret123' }).ok) throw new Error('نام کاربری تکراری پذیرفته شد');
+          if (D.register({ username: 'x', password: 'secret123' }).ok) throw new Error('نام کاربری کوتاه پذیرفته شد');
+          if (D.register({ username: 'admin', password: 'secret123' }).ok) throw new Error('نام رزروشده پذیرفته شد');
+          if (D.register({ username: 'bob', password: 'short' }).ok) throw new Error('رمز ضعیف پذیرفته شد');
+          if (D.register({ username: 'bob', password: 'onlyletters' }).ok) throw new Error('رمز بدون عدد پذیرفته شد');
+
+          if (!D.login('ali_test', 'secret123').ok) throw new Error('ورود نشد');
+          if (!D.login('ALI_TEST', 'secret123').ok) throw new Error('ورود با حروف بزرگ نشد');
+          if (D.login('ali_test', 'wrong123').ok) throw new Error('رمز غلط پذیرفته شد');
+
+          // بازیابی: کد یک‌بارمصرف است
+          const rec = D.recoverWithCode('ali_test', r.recovery, 'newpass123');
+          if (!rec.ok) throw new Error('بازیابی نشد: ' + rec.reason);
+          if (D.recoverWithCode('ali_test', r.recovery, 'other123').ok) throw new Error('کد بازیابی دوباره کار کرد');
+          if (!D.login('ali_test', 'newpass123').ok) throw new Error('رمز جدید کار نکرد');
+          console.log('✓ ورود و بازیابی سالم است');
+          "
+
+      - name: تست اقتصاد تتری — بالانس نباید گم یا ساخته شود
+        run: |
+          node -e "
+          process.env.NARD_DATA = '/tmp/citest3';
+          const D = require('./server/db.js');
+          const f = D.fmtUsdt;
+          const u = D.register({ username: 'payer', password: 'secret123' }).user;
+          const crypto = require('crypto');
+
+          // واریز ۲۰ تتر
+          const dep = D.requestDeposit(u.id, { amount: 20000000, txid: crypto.randomBytes(32).toString('hex') });
+          if (!dep.ok) throw new Error('واریز ثبت نشد: ' + dep.reason);
+          if (!D.resolveDeposit(dep.id, 'approve', {}).ok) throw new Error('تأیید واریز نشد');
+          if (D.resolveDeposit(dep.id, 'approve', {}).ok) throw new Error('واریز دوباره تأیید شد');
+
+          // وچر ۵ تتری، فقط یک بار
+          const v = D.createVouchers(5000000, 1, {}).codes[0];
+          if (!D.redeemVoucher(u.id, v).ok) throw new Error('وچر کار نکرد');
+          if (D.redeemVoucher(u.id, v).ok) throw new Error('وچر دوبار خرج شد');
+
+          // خرید و فروش: اسپرد باید به نفع خانه باشد
+          const before = D.getUser(u.id).balance;
+          if (!D.buyCoins(u.id, 100000).ok) throw new Error('خرید نشد');
+          if (!D.sellCoins(u.id, 100000).ok) throw new Error('فروش نشد');
+          const after = D.getUser(u.id).balance;
+          if (after >= before) throw new Error('خرید و فروش پیاپی پول ساخت — اسپرد خراب است');
+
+          // برداشت و برگشتش
+          const w = D.requestWithdraw(u.id, { amount: 10000000, address: 'TW8JLHqKt9nCJZ8mEqvkMzVQZpXoF6oPZs' });
+          if (!w.ok) throw new Error('برداشت ثبت نشد: ' + w.reason);
+          const midway = D.getUser(u.id).balance;
+          if (midway !== after - 10000000) throw new Error('بالانس هنگام درخواست کسر نشد');
+          D.resolveWithdraw(w.id, 'reject', { note: 'تست' });
+          if (D.getUser(u.id).balance !== after) throw new Error('رد کردن برداشت پول را برنگرداند');
+
+          // آدرس نامعتبر
+          if (D.requestWithdraw(u.id, { amount: 10000000, address: 'nonsense' }).ok) throw new Error('آدرس نامعتبر پذیرفته شد');
+          // بیشتر از موجودی
+          if (D.requestWithdraw(u.id, { amount: 999000000, address: 'TW8JLHqKt9nCJZ8mEqvkMzVQZpXoF6oPZs' }).ok) throw new Error('برداشت بیش از موجودی پذیرفته شد');
+
+          // حسابداری کل
+          const held = D.db.prepare('SELECT COALESCE(SUM(balance),0) n FROM users').get().n;
+          const inDep = D.db.prepare(\"SELECT COALESCE(SUM(credited),0) n FROM deposits WHERE status='approved'\").get().n;
+          const inVou = D.db.prepare('SELECT COALESCE(SUM(amount),0) n FROM vouchers WHERE used_at IS NOT NULL').get().n;
+          const paid  = D.db.prepare(\"SELECT COALESCE(SUM(amount),0) n FROM withdrawals WHERE status='paid'\").get().n;
+          const spread = D.db.prepare(\"SELECT COALESCE(SUM(-balance),0) n FROM transactions WHERE type IN ('buy','sell')\").get().n;
+          console.log('ورودی', f(inDep + inVou), '| خروجی', f(paid), '| اسپرد', f(spread), '| مانده', f(held));
+          if (inDep + inVou - paid - spread !== held) { console.log('✗ حسابداری ناتراز'); process.exit(1); }
+          console.log('✓ اقتصاد تتری تراز است');
+          "
+
+      - name: تست ادغام حساب — سکه نباید گم شود
+        run: |
+          node -e "
+          process.env.NARD_DATA = '/tmp/citest4';
+          const D = require('./server/db.js');
+          const web = D.register({ username: 'webuser', password: 'secret123' }).user;
+          const tg = D.createUser({ telegramId: '55501', name: 'تلگرامی', isGuest: 1 });
+          D.wallet(web.id, { coins: 1000, balance: 3000000, type: 'admin' });
+          D.wallet(tg.id,  { coins: 2500, balance: 1000000, type: 'admin' });
+
+          const link = D.createLinkCode(web.id);
+          const r = D.consumeLinkCode(link.code, tg.id);
+          if (!r.ok) throw new Error('ادغام نشد: ' + r.reason);
+
+          const kept = D.getUser(web.id);
+          if (kept.coins !== 3500) throw new Error('سکه‌ها درست منتقل نشدند: ' + kept.coins);
+          if (kept.balance !== 4000000) throw new Error('بالانس درست منتقل نشد: ' + kept.balance);
+          if (kept.telegram_id !== '55501') throw new Error('تلگرام منتقل نشد');
+          if (D.getUser(tg.id).coins !== 0) throw new Error('حساب ادغام‌شده خالی نشد');
+          console.log('✓ ادغام حساب سالم است');
           "
 
   web:
@@ -114,5 +216,5 @@ jobs:
         working-directory: web
         env:
           NEXT_PUBLIC_SITE_URL: https://farhadtest.ir
-          NEXT_PUBLIC_API_URL: http://localhost:8080
+          NEXT_PUBLIC_API_URL: https://farhadtest.ir
         run: npm run build

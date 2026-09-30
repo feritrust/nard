@@ -1,41 +1,61 @@
 /* =========================================================================
- *  auth.js — ورود و ثبت‌نام با شماره‌ی موبایل
+ *  auth.js — ثبت‌نام، ورود و بازیابی با نام کاربری و رمز
  *
- *  دو حالت دارد:
- *    • server  → کد تأیید را از سرور می‌گیرد (سرور خودش پیامک می‌فرستد)
- *    • local   → وقتی سرور در دسترس نیست، کد را همان‌جا می‌سازد و نشان می‌دهد
- *                (فقط برای تست و بازی آفلاین)
+ *  همه‌ی اعتبارسنجی واقعی سمت سرور است؛ اینجا فقط همان قانون‌ها را
+ *  تکرار می‌کنیم تا کاربر قبل از رفت‌وبرگشت شبکه بازخورد بگیرد.
  *
- *  برای اتصال سرویس پیامک واقعی (کاوه‌نگار، ملی‌پیامک، فراز اس‌ام‌اس و …)
- *  فایل server/server.js بخش sendSms را ببینید — نیازی به تغییر این فایل نیست.
+ *  بدون سرور (بازی آفلاین با ربات) ثبت‌نام معنا ندارد — در آن حالت
+ *  کاربر به‌عنوان مهمان بازی می‌کند و همه چیز روی همین دستگاه می‌ماند.
  * ========================================================================= */
 (function (root) {
   'use strict';
 
-  var CODE_LEN = 5;
-  var RESEND_SECONDS = 60;
-  var CODE_TTL_MS = 2 * 60 * 1000;
-
   /* ------------------------------------------------------- اعتبارسنجی */
 
-  /** شماره‌ی موبایل ایران را به شکل استاندارد 09xxxxxxxxx برمی‌گرداند */
-  function normalizePhone(raw) {
-    if (!raw) return null;
-    // تبدیل ارقام فارسی و عربی به انگلیسی
-    var s = String(raw).replace(/[۰-۹]/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d); })
-                       .replace(/[٠-٩]/g, function (d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); });
-    s = s.replace(/\D/g, '');
-    if (s.indexOf('0098') === 0) s = '0' + s.slice(4);
-    else if (s.indexOf('98') === 0 && s.length === 12) s = '0' + s.slice(2);
-    else if (s.length === 10 && s[0] === '9') s = '0' + s;
-    if (!/^09\d{9}$/.test(s)) return null;
-    return s;
+  function normUsername(u) {
+    return String(u || '').trim().toLowerCase();
   }
 
-  function prettyPhone(p) {
-    if (!p) return '';
-    return p.slice(0, 4) + ' ' + p.slice(4, 7) + ' ' + p.slice(7);
+  var RESERVED = /^(admin|owner|support|root|system|nard|moderator|mod)$/;
+
+  /** @returns پیام خطا، یا null اگر درست باشد */
+  function usernameProblem(u) {
+    var n = normUsername(u);
+    if (!n) return 'نام کاربری را وارد کنید';
+    if (n.length < 3) return 'نام کاربری حداقل ۳ حرف باشد';
+    if (n.length > 20) return 'نام کاربری حداکثر ۲۰ حرف باشد';
+    if (!/^[a-z0-9_]+$/.test(n)) return 'فقط حروف انگلیسی، عدد و زیرخط (_) مجاز است';
+    if (/^[0-9_]/.test(n)) return 'نام کاربری باید با یک حرف شروع شود';
+    if (RESERVED.test(n)) return 'این نام کاربری رزرو شده است';
+    return null;
   }
+
+  function passwordProblem(p) {
+    var s = String(p || '');
+    if (!s) return 'رمز عبور را وارد کنید';
+    if (s.length < 8) return 'رمز حداقل ۸ کاراکتر باشد';
+    if (s.length > 200) return 'رمز خیلی بلند است';
+    if (!/[a-zA-Z]/.test(s) || !/[0-9]/.test(s)) return 'رمز باید هم حرف داشته باشد هم عدد';
+    return null;
+  }
+
+  /** قدرت رمز، برای نوار راهنما: ۰ تا ۴ */
+  function passwordStrength(p) {
+    var s = String(p || ''), score = 0;
+    if (s.length >= 8) score++;
+    if (s.length >= 12) score++;
+    if (/[a-z]/.test(s) && /[A-Z]/.test(s)) score++;
+    if (/[^a-zA-Z0-9]/.test(s)) score++;
+    return Math.min(4, score);
+  }
+
+  /** کد بازیابی را به شکل XXXX-XXXX-… مرتب می‌کند */
+  function normRecovery(c) {
+    var raw = String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    return raw.replace(/(.{4})(?=.)/g, '$1-');
+  }
+
+  /* ----------------------------------------------------------- شبکه */
 
   function serverBase() {
     var url = (root.Net && root.Net.config && root.Net.config.serverUrl) || '';
@@ -48,91 +68,95 @@
       .replace(/\/ws$/, '');
   }
 
-  /* ------------------------------------------------- حالت محلی (آفلاین) */
-
-  var local = { phone: null, code: null, expires: 0, tries: 0 };
-
-  function localRequest(phone) {
-    local.phone = phone;
-    local.code = String(Math.floor(Math.random() * 90000) + 10000);
-    local.expires = Date.now() + CODE_TTL_MS;
-    local.tries = 0;
+  function offline() {
     return Promise.resolve({
-      ok: true, mode: 'local', ttl: CODE_TTL_MS,
-      devCode: local.code,          // چون سرور نداریم، کد را به کاربر نشان می‌دهیم
-      resendIn: RESEND_SECONDS
+      ok: false,
+      message: 'برای ساخت حساب باید به سرور وصل باشید. فعلاً می‌توانید مهمان بازی کنید.'
     });
   }
-
-  function localVerify(phone, code) {
-    if (local.phone !== phone) return Promise.resolve({ ok: false, message: 'ابتدا کد را درخواست کنید' });
-    if (Date.now() > local.expires) return Promise.resolve({ ok: false, message: 'کد منقضی شده — دوباره درخواست دهید' });
-    if (++local.tries > 5) return Promise.resolve({ ok: false, message: 'تعداد تلاش زیاد — دوباره کد بگیرید' });
-    if (String(code) !== local.code) return Promise.resolve({ ok: false, message: 'کد وارد شده درست نیست' });
-    return Promise.resolve({
-      ok: true, mode: 'local',
-      userId: 'u_' + phone.slice(-8),
-      token: 'local_' + phone
-    });
-  }
-
-  /* ------------------------------------------------------- حالت سرور */
 
   function post(path, body) {
     var base = serverBase();
+    if (!base) return offline();
+
+    var headers = { 'Content-Type': 'application/json' };
+    // اگر مهمان وارد است، توکنش را می‌فرستیم تا همان حساب ارتقا یابد
+    var tk = root.API && root.API.token;
+    if (tk) headers['Authorization'] = 'Bearer ' + tk;
+
     return fetch(base + path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    }).then(function (r) { return r.json(); });
-  }
-
-  /* ------------------------------------------------------------ خروجی */
-
-  /** درخواست کد تأیید */
-  function requestCode(rawPhone) {
-    var phone = normalizePhone(rawPhone);
-    if (!phone) return Promise.resolve({ ok: false, message: 'شماره‌ی موبایل درست نیست (مثال: ۰۹۱۲۱۲۳۴۵۶۷)' });
-
-    if (!serverBase()) return localRequest(phone);
-
-    return post('/auth/request', { phone: phone })
+      method: 'POST', headers: headers, body: JSON.stringify(body)
+    })
+      .then(function (r) { return r.json(); })
       .then(function (d) {
-        if (!d || !d.ok) return { ok: false, message: (d && d.message) || 'ارسال کد ناموفق بود' };
-        d.mode = 'server';
+        if (!d) return { ok: false, message: 'پاسخ سرور خوانده نشد' };
+        if (!d.ok && !d.message) d.message = d.reason || 'انجام نشد';
         return d;
       })
       .catch(function () {
-        // سرور در دسترس نیست → می‌رویم روی حالت محلی
-        return localRequest(phone);
+        return { ok: false, message: 'به سرور وصل نشدیم — اینترنت را بررسی کنید' };
       });
   }
 
-  /** بررسی کد تأیید */
-  function verifyCode(rawPhone, code) {
-    var phone = normalizePhone(rawPhone);
-    if (!phone) return Promise.resolve({ ok: false, message: 'شماره‌ی موبایل درست نیست' });
-    code = String(code || '').replace(/[۰-۹]/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d); }).replace(/\D/g, '');
-    if (code.length !== CODE_LEN) return Promise.resolve({ ok: false, message: 'کد ' + CODE_LEN + ' رقمی را کامل وارد کنید' });
+  /* ---------------------------------------------------------- خروجی */
 
-    if (!serverBase()) return localVerify(phone, code);
+  /** آیا این نام کاربری آزاد است؟ برای بازخورد زنده‌ی فرم */
+  function checkUsername(u) {
+    var problem = usernameProblem(u);
+    if (problem) return Promise.resolve({ ok: true, available: false, message: problem });
 
-    return post('/auth/verify', { phone: phone, code: code })
-      .then(function (d) {
-        if (!d || !d.ok) return { ok: false, message: (d && d.message) || 'کد درست نیست' };
-        d.mode = 'server';
-        return d;
-      })
-      .catch(function () { return localVerify(phone, code); });
+    var base = serverBase();
+    if (!base) return Promise.resolve({ ok: true, available: true, message: '' });
+
+    return fetch(base + '/auth/check-username?u=' + encodeURIComponent(normUsername(u)))
+      .then(function (r) { return r.json(); })
+      .catch(function () { return { ok: true, available: true, message: '' } });
+  }
+
+  function register(username, password, extra) {
+    var p = usernameProblem(username) || passwordProblem(password);
+    if (p) return Promise.resolve({ ok: false, message: p });
+
+    var body = { username: normUsername(username), password: String(password) };
+    if (extra) {
+      if (extra.name) body.name = extra.name;
+      if (extra.avatar) body.avatar = extra.avatar;
+      if (extra.source) body.source = extra.source;
+    }
+    return post('/auth/register', body);
+  }
+
+  function login(username, password) {
+    if (!normUsername(username)) return Promise.resolve({ ok: false, message: 'نام کاربری را وارد کنید' });
+    if (!password) return Promise.resolve({ ok: false, message: 'رمز عبور را وارد کنید' });
+    return post('/auth/login', { username: normUsername(username), password: String(password) });
+  }
+
+  function recover(username, code, newPassword) {
+    if (!normUsername(username)) return Promise.resolve({ ok: false, message: 'نام کاربری را وارد کنید' });
+    var clean = normRecovery(code);
+    if (clean.replace(/-/g, '').length < 20) {
+      return Promise.resolve({ ok: false, message: 'کد بازیابی کامل نیست' });
+    }
+    var pp = passwordProblem(newPassword);
+    if (pp) return Promise.resolve({ ok: false, message: pp });
+
+    return post('/auth/recover', {
+      username: normUsername(username), code: clean, password: String(newPassword)
+    });
   }
 
   root.Auth = {
-    CODE_LEN: CODE_LEN,
-    RESEND_SECONDS: RESEND_SECONDS,
-    normalizePhone: normalizePhone,
-    prettyPhone: prettyPhone,
-    requestCode: requestCode,
-    verifyCode: verifyCode
+    normUsername: normUsername,
+    normRecovery: normRecovery,
+    usernameProblem: usernameProblem,
+    passwordProblem: passwordProblem,
+    passwordStrength: passwordStrength,
+    checkUsername: checkUsername,
+    register: register,
+    login: login,
+    recover: recover,
+    serverBase: serverBase
   };
 
 })(typeof self !== 'undefined' ? self : this);

@@ -28,60 +28,138 @@
         <div class="muted" style="margin-top:4px">فقط با ثبت‌نام، رایگان دریافت کنید</div>
       </div>
 
-      <button class="btn primary" id="btn-go-phone" style="margin-bottom:10px">📱 ورود با شماره موبایل</button>
-      <button class="btn ghost" id="btn-guest">ورود مهمان (بدون شماره)</button>
+      <button class="btn primary" id="btn-go-signup" style="margin-bottom:10px">✨ ساخت حساب جدید</button>
+      <button class="btn" id="btn-go-login" style="margin-bottom:10px">ورود به حساب</button>
+      <button class="btn ghost" id="btn-guest">بازی به‌عنوان مهمان</button>
       <div class="muted" style="text-align:center;margin-top:14px;font-size:11.5px">
-        با ورود، <b>قوانین بازی</b> را می‌پذیرید. شماره‌ی شما فقط برای ورود و بازگرداندن حساب استفاده می‌شود.
+        با ورود، <b>قوانین بازی</b> را می‌پذیرید. حساب مهمان روی همین دستگاه می‌ماند —
+        برای نگه داشتن سکه‌ها حتماً حساب بسازید.
       </div>
     </div>
   </section>
 
-  <!-- ============================ شماره موبایل ============================ -->
-  <section class="screen" id="screen-phone">
+  <!-- ============================ ورود ============================ -->
+  <section class="screen" id="screen-signin">
     <div class="topbar">
       <button class="icon-btn" data-back>→</button>
-      <h1>ورود با شماره موبایل</h1>
+      <h1>ورود به حساب</h1>
     </div>
     <div class="login-wrap" style="justify-content:flex-start;padding-top:10px">
-      <div style="text-align:center;font-size:52px;margin-bottom:8px">📱</div>
-      <p class="muted" style="text-align:center;margin-bottom:18px">
-        شماره‌ی موبایل خود را وارد کنید.<br>یک کد ۵ رقمی برایتان پیامک می‌شود.
-      </p>
+      <div style="text-align:center;font-size:52px;margin-bottom:8px">🔑</div>
+
       <label class="fld">
-        <span>شماره موبایل</span>
-        <input class="input" id="in-phone" type="tel" inputmode="numeric" maxlength="13"
-               placeholder="09121234567" style="direction:ltr;text-align:center;letter-spacing:2px;font-size:18px">
+        <span>نام کاربری</span>
+        <input class="input" id="in-login-user" autocomplete="username" maxlength="20"
+               placeholder="username" style="direction:ltr;text-align:left">
       </label>
-      <button class="btn primary" id="btn-send-code">ارسال کد تأیید</button>
+
+      <label class="fld">
+        <span>رمز عبور</span>
+        <input class="input" id="in-login-pass" type="password" autocomplete="current-password"
+               placeholder="••••••••" style="direction:ltr;text-align:left">
+      </label>
+
+      <button class="btn primary" id="btn-do-login">ورود</button>
+      <button class="btn ghost sm" id="btn-go-recover" style="margin:14px auto 0;width:auto">رمزم را فراموش کرده‌ام</button>
+      <button class="btn ghost sm" id="btn-signin-to-signup" style="margin:6px auto 0;width:auto">حساب ندارم — ثبت‌نام</button>
     </div>
   </section>
 
-  <!-- ============================ کد تأیید ============================ -->
-  <section class="screen" id="screen-otp">
+  <!-- ============================ ثبت‌نام ============================ -->
+  <section class="screen" id="screen-signup">
     <div class="topbar">
       <button class="icon-btn" data-back>→</button>
-      <h1>کد تأیید</h1>
+      <h1>ساخت حساب</h1>
     </div>
     <div class="login-wrap" style="justify-content:flex-start;padding-top:10px">
-      <div style="text-align:center;font-size:52px;margin-bottom:8px">✉️</div>
-      <p class="muted" style="text-align:center;margin-bottom:6px">
-        کد ۵ رقمی ارسال‌شده به شماره‌ی زیر را وارد کنید
-      </p>
-      <div style="text-align:center;font-weight:900;direction:ltr;margin-bottom:16px" id="otp-phone">0912 123 4567</div>
-
-      <div class="otp-boxes" id="otp-boxes">
-        <input class="otp-box" type="tel" inputmode="numeric" maxlength="1">
-        <input class="otp-box" type="tel" inputmode="numeric" maxlength="1">
-        <input class="otp-box" type="tel" inputmode="numeric" maxlength="1">
-        <input class="otp-box" type="tel" inputmode="numeric" maxlength="1">
-        <input class="otp-box" type="tel" inputmode="numeric" maxlength="1">
+      <div class="welcome-gift" style="margin-bottom:16px">
+        <div style="font-size:26px">🎁</div>
+        <div class="big">۵۰۰ سکه هدیه</div>
+        <div class="muted" style="margin-top:4px">به‌محض ساخت حساب</div>
       </div>
 
-      <div class="dev-code" id="dev-code" style="display:none"></div>
+      <label class="fld">
+        <span>نام کاربری</span>
+        <input class="input" id="in-reg-user" autocomplete="username" maxlength="20"
+               placeholder="فقط حروف انگلیسی، عدد و _" style="direction:ltr;text-align:left">
+        <small class="hint" id="user-hint"></small>
+      </label>
 
-      <button class="btn primary" id="btn-verify-code" style="margin-top:6px">تأیید و ادامه</button>
-      <button class="btn ghost sm" id="btn-resend" style="margin:12px auto 0;width:auto">ارسال دوباره‌ی کد</button>
-      <button class="btn ghost sm" id="btn-change-phone" style="margin:8px auto 0;width:auto">تغییر شماره</button>
+      <label class="fld">
+        <span>رمز عبور</span>
+        <input class="input" id="in-reg-pass" type="password" autocomplete="new-password"
+               placeholder="حداقل ۸ کاراکتر، حرف و عدد" style="direction:ltr;text-align:left">
+        <small class="hint" id="pass-hint"></small>
+      </label>
+
+      <label class="fld">
+        <span>تکرار رمز عبور</span>
+        <input class="input" id="in-reg-pass2" type="password" autocomplete="new-password"
+               placeholder="••••••••" style="direction:ltr;text-align:left">
+      </label>
+
+      <button class="btn primary" id="btn-do-signup">ساخت حساب</button>
+      <button class="btn ghost sm" id="btn-signup-to-signin" style="margin:12px auto 0;width:auto">حساب دارم — ورود</button>
+    </div>
+  </section>
+
+  <!-- ==================== کد بازیابی (فقط یک بار) ==================== -->
+  <section class="screen" id="screen-recovery-show">
+    <div class="login-wrap" style="justify-content:flex-start;padding-top:20px">
+      <div style="text-align:center;font-size:52px;margin-bottom:6px">🗝️</div>
+      <h2 style="text-align:center;margin:0 0 4px">کد بازیابی شما</h2>
+      <p class="muted" style="text-align:center;margin-bottom:16px">
+        این کد <b>فقط همین یک بار</b> نمایش داده می‌شود.<br>
+        تنها راه پس گرفتن حساب اگر رمزتان را فراموش کنید همین است.
+      </p>
+
+      <div class="recovery-box" id="recovery-code">----</div>
+
+      <button class="btn" id="btn-copy-recovery" style="margin-bottom:10px">📋 کپی کردن کد</button>
+
+      <label class="chk" style="margin:10px 0 14px">
+        <input type="checkbox" id="chk-saved-recovery">
+        <span>کد را جایی امن ذخیره کردم</span>
+      </label>
+
+      <button class="btn primary" id="btn-recovery-done" disabled>ادامه</button>
+    </div>
+  </section>
+
+  <!-- ==================== بازیابی رمز ==================== -->
+  <section class="screen" id="screen-recover">
+    <div class="topbar">
+      <button class="icon-btn" data-back>→</button>
+      <h1>بازیابی حساب</h1>
+    </div>
+    <div class="login-wrap" style="justify-content:flex-start;padding-top:10px">
+      <p class="muted" style="text-align:center;margin-bottom:16px">
+        کد بازیابی‌ای که موقع ثبت‌نام گرفتید را وارد کنید.<br>
+        بعد از استفاده، یک کد تازه می‌گیرید.
+      </p>
+
+      <label class="fld">
+        <span>نام کاربری</span>
+        <input class="input" id="in-rec-user" maxlength="20" placeholder="username"
+               style="direction:ltr;text-align:left">
+      </label>
+
+      <label class="fld">
+        <span>کد بازیابی</span>
+        <input class="input" id="in-rec-code" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX"
+               style="direction:ltr;text-align:center;letter-spacing:1px;text-transform:uppercase">
+      </label>
+
+      <label class="fld">
+        <span>رمز عبور جدید</span>
+        <input class="input" id="in-rec-pass" type="password" placeholder="حداقل ۸ کاراکتر"
+               style="direction:ltr;text-align:left">
+      </label>
+
+      <button class="btn primary" id="btn-do-recover">بازیابی حساب</button>
+      <div class="muted" style="text-align:center;margin-top:14px;font-size:11.5px">
+        اگر حسابتان را به تلگرام وصل کرده‌اید، از همان مینی‌اپ هم می‌توانید وارد شوید.
+      </div>
     </div>
   </section>
 
@@ -303,19 +381,30 @@
   <section class="screen" id="screen-shop">
     <div class="topbar">
       <button class="icon-btn" data-back>→</button>
-      <h1>فروشگاه</h1>
+      <h1>کیف پول</h1>
     </div>
-    <div class="wallet">
-      <div class="chip coins"><span class="ic">🪙</span><span class="val w-coins">۰</span></div>
-      <div class="chip energy"><span class="ic">⚡</span><span class="val w-energy">۰</span></div>
-    </div>
-    <div class="scroll">
-      <div class="row" style="margin-bottom:14px">
-        <button class="btn primary sm" id="tab-buy" style="flex:1">خرید سکه</button>
-        <button class="btn ghost sm" id="tab-sell" style="flex:1">فروش سکه</button>
+
+    <div class="balance-card">
+      <div class="bal-label">موجودی تتر</div>
+      <div class="bal-amount" id="bal-usdt">۰٫۰۰ <span>USDT</span></div>
+      <div class="wallet" style="margin:10px 0 0;justify-content:center">
+        <div class="chip coins"><span class="ic">🪙</span><span class="val w-coins">۰</span></div>
+        <div class="chip energy"><span class="ic">⚡</span><span class="val w-energy">۰</span></div>
       </div>
-      <div id="shop-buy"></div>
-      <div id="shop-sell" style="display:none"></div>
+    </div>
+
+    <div class="tabs" id="wallet-tabs">
+      <button class="tab active" data-tab="buy">خرید سکه</button>
+      <button class="tab" data-tab="sell">فروش سکه</button>
+      <button class="tab" data-tab="deposit">شارژ</button>
+      <button class="tab" data-tab="withdraw">برداشت</button>
+    </div>
+
+    <div class="scroll">
+      <div class="tab-pane" id="pane-buy"></div>
+      <div class="tab-pane" id="pane-sell" style="display:none"></div>
+      <div class="tab-pane" id="pane-deposit" style="display:none"></div>
+      <div class="tab-pane" id="pane-withdraw" style="display:none"></div>
     </div>
   </section>
 
@@ -463,6 +552,24 @@
         </div>
       </div>
 
+      <div class="card" id="card-account">
+        <h3>حساب کاربری</h3>
+        <div class="row" style="margin-bottom:10px;align-items:center">
+          <div>نام کاربری</div>
+          <div style="direction:ltr;font-weight:800" id="acc-username">—</div>
+        </div>
+
+        <div class="row" style="margin-bottom:10px;align-items:center">
+          <div>تلگرام</div>
+          <div id="acc-telegram" class="muted">وصل نیست</div>
+        </div>
+
+        <button class="btn sm" id="btn-link-telegram" style="margin-bottom:8px">🔗 وصل کردن به تلگرام</button>
+        <button class="btn sm" id="btn-change-pass" style="margin-bottom:8px">تغییر رمز عبور</button>
+        <button class="btn sm" id="btn-new-recovery" style="margin-bottom:8px">کد بازیابی تازه</button>
+        <button class="btn ghost sm" id="btn-logout">خروج از حساب</button>
+      </div>
+
       <div class="card">
         <h3>اتصال</h3>
         <label class="fld">
@@ -501,7 +608,6 @@
 <script src="js/net.js"></script>
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
-<script src="js/payment.js"></script>
 <script src="js/ui.js"></script>
 </body>
 </html>
